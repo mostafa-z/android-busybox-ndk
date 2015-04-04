@@ -114,14 +114,16 @@
 # include <netinet/in.h>
 #else
 # include <arpa/inet.h>
-# if !defined(__socklen_t_defined) && !defined(_SOCKLEN_T_DECLARED)
+
+//# if !defined(__socklen_t_defined) && !defined(_SOCKLEN_T_DECLARED)
 /* We #define socklen_t *after* includes, otherwise we get
  * typedef redefinition errors from system headers
  * (in case "is it defined already" detection above failed)
  */
-#  define socklen_t bb_socklen_t
-   typedef unsigned socklen_t;
-# endif
+//#  define socklen_t bb_socklen_t
+//   typedef unsigned socklen_t;
+//# endif
+
 #endif
 #ifndef HAVE_CLEARENV
 # define clearenv() do { if (environ) environ[0] = NULL; } while (0)
@@ -1812,12 +1814,12 @@ extern struct globals *const ptr_to_globals;
  * use bb_default_login_shell and following defines.
  * If you change LIBBB_DEFAULT_LOGIN_SHELL,
  * don't forget to change increment constant. */
-#define LIBBB_DEFAULT_LOGIN_SHELL  "-/bin/sh"
+#define LIBBB_DEFAULT_LOGIN_SHELL  "-/system/bin/sh"
 extern const char bb_default_login_shell[] ALIGN1;
 /* "/bin/sh" */
 #define DEFAULT_SHELL              (bb_default_login_shell+1)
 /* "sh" */
-#define DEFAULT_SHELL_SHORT_NAME   (bb_default_login_shell+6)
+#define DEFAULT_SHELL_SHORT_NAME   (bb_default_login_shell+7)
 
 /* The following devices are the same on all systems.  */
 #define CURRENT_TTY "/dev/tty"

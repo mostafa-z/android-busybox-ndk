@@ -77,6 +77,7 @@
 #include "libbb.h"
 #include <netpacket/packet.h>
 #include <netinet/ether.h>
+#include <netinet/if_ether.h>
 #include <linux/if.h>
 
 /* Note: PF_INET, SOCK_DGRAM, IPPROTO_UDP would allow SIOCGIFHWADDR to

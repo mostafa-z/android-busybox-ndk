@@ -124,7 +124,7 @@ int more_main(int argc UNUSED_PARAM, char **argv)
 					uoff_t d = (uoff_t)st.st_size / 100;
 					if (d == 0)
 						d = 1;
-					len += printf("(%u%% of %"OFF_FMT"u bytes)",
+					len += printf("(%u%% of %"OFF_FMT"ld bytes)",
 						(int) ((uoff_t)ftello(file) / d),
 						st.st_size);
 				}

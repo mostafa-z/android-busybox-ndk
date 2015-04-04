@@ -1,7 +1,7 @@
 VERSION = 1
 PATCHLEVEL = 24
-SUBLEVEL = 0
-EXTRAVERSION = .git
+SUBLEVEL = 1
+EXTRAVERSION = -Dorimanx
 NAME = Unnamed
 
 # *DOCUMENTATION*
@@ -271,8 +271,8 @@ export quiet Q KBUILD_VERBOSE
 # Look for make include files relative to root of kernel src
 MAKEFLAGS += --include-dir=$(srctree)
 
-HOSTCC  	= gcc
-HOSTCXX  	= g++
+HOSTCC  	= ccache gcc
+HOSTCXX  	= ccache g++
 HOSTCFLAGS	:=
 HOSTCXXFLAGS	:=
 # We need some generic definitions
@@ -289,7 +289,7 @@ MAKEFLAGS += -rR
 # Make variables (CC, etc...)
 
 AS		= $(CROSS_COMPILE)as
-CC		= $(CROSS_COMPILE)gcc
+CC		= ccache $(CROSS_COMPILE)gcc
 LD		= $(CC) -nostdlib
 CPP		= $(CC) -E
 AR		= $(CROSS_COMPILE)ar
@@ -476,6 +476,7 @@ libs-y		:= \
 		init/ \
 		libbb/ \
 		libpwdgrp/ \
+		libres/ \
 		loginutils/ \
 		mailutils/ \
 		miscutils/ \

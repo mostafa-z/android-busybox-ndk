@@ -26,6 +26,7 @@
 #include <net/if.h>
 #include <netinet/ether.h>
 #include <netpacket/packet.h>
+#include <linux/if_arp.h> /* for arphdr */
 
 #include "libbb.h"
 
@@ -78,13 +79,6 @@ struct globals {
 #define INIT_G() do { \
 	count = -1; \
 } while (0)
-
-// If GNUisms are not available...
-//static void *mempcpy(void *_dst, const void *_src, int n)
-//{
-//	memcpy(_dst, _src, n);
-//	return (char*)_dst + n;
-//}
 
 static int send_pack(struct in_addr *src_addr,
 			struct in_addr *dst_addr, struct sockaddr_ll *ME,
@@ -228,12 +222,13 @@ static bool recv_pack(unsigned char *buf, int len, struct sockaddr_ll *FROM)
 	}
 	if (!(option_mask32 & QUIET)) {
 		int s_printed = 0;
+		char ether_buf[20];
 
-		printf("%scast re%s from %s [%s]",
+		printf("%scast re%s from %s [%d]",
 			FROM->sll_pkttype == PACKET_HOST ? "Uni" : "Broad",
 			ah->ar_op == htons(ARPOP_REPLY) ? "ply" : "quest",
 			inet_ntoa(src_ip),
-			ether_ntoa((struct ether_addr *) p));
+			ether_ntoa_r((struct ether_addr *) p, ether_buf));
 		if (dst_ip.s_addr != src.s_addr) {
 			printf("for %s ", inet_ntoa(dst_ip));
 			s_printed = 1;
@@ -241,8 +236,8 @@ static bool recv_pack(unsigned char *buf, int len, struct sockaddr_ll *FROM)
 		if (memcmp(p + ah->ar_hln + 4, me.sll_addr, ah->ar_hln)) {
 			if (!s_printed)
 				printf("for ");
-			printf("[%s]",
-				ether_ntoa((struct ether_addr *) p + ah->ar_hln + 4));
+			printf("[%d]",
+				ether_ntoa_r((struct ether_addr *) p + ah->ar_hln + 4, ether_buf));
 		}
 
 		if (last) {

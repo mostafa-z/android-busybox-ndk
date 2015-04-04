@@ -39,4 +39,79 @@ int pivot_root(const char *new_root, const char *put_old)
 {
 	return syscall(__NR_pivot_root, new_root, put_old);
 }
+
+int swapoff(const char *path)
+{
+  return syscall(__NR_swapoff, path);
+}
+
+int swapon(const char *path, int swapflags)
+{
+  return syscall(__NR_swapon, path, swapflags);
+}
+
+int shmget(key_t key, size_t size, int shmflg)
+{
+  return syscall(__NR_shmget, key, size, shmflg);
+}
+
+int shmdt(const void *shmaddr)
+{
+  return syscall(__NR_shmdt, shmaddr);
+}
+
+void *shmat(int shmid, const void *shmaddr, int shmflg)
+{
+  return (void *)syscall(__NR_shmat, shmid, shmaddr, shmflg);
+}
+
+int msgget(key_t key, int msgflg)
+{
+  return syscall(__NR_msgget, key, msgflg);
+}
+
+int semget(key_t key, int nsems, int semflg)
+{
+  return syscall(__NR_semget, key, nsems, semflg);
+}
+
+ssize_t readahead(int fd, off64_t offset, size_t count)
+{
+  return syscall(__NR_readahead, fd, offset, count);
+}
+
+struct msqid_ds; /* #include <linux/msg.h> */
+int msgctl(int msqid, int cmd, struct msqid_ds *buf)
+{
+  return syscall(__NR_msgctl, msqid, cmd, buf);
+}
+
+struct shmid_ds; /* #include <linux/shm.h> */
+// NOTE: IPC_INFO takes a struct shminfo64
+int shmctl(int shmid, int cmd, struct shmid_ds *buf)
+{
+  return syscall(__NR_shmctl, shmid, cmd, buf);
+}
+
+struct sembuf; /* #include <linux/sem.h> */
+int semop(int semid, struct sembuf *sops, unsigned nsops)
+{
+  return syscall(__NR_semop, semid, sops, nsops);
+}
+
+int __rt_sigtimedwait(const sigset_t *set, siginfo_t *info, const struct timespec *ts, long nr)
+{
+    return syscall(__NR_rt_sigtimedwait, set, info, ts, nr);
+}
+
+int sigtimedwait(const sigset_t *set, siginfo_t *info, const struct timespec *ts)
+{
+    return __rt_sigtimedwait(set, info, ts, _NSIG / 8);
+}
+
+int sigwaitinfo(const sigset_t *set, siginfo_t *info)
+{
+    return sigtimedwait(set, info, NULL);
+}
+
 #endif

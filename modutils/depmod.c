@@ -49,7 +49,10 @@ static int FAST_FUNC parse_module(const char *fname, struct stat *sb UNUSED_PARA
 	*first = info;
 
 	info->dnext = info->dprev = info;
-	info->name = xstrdup(fname + 2); /* skip "./" */
+	if (strncmp(fname, "./", 2) == 0)
+		info->name = xstrdup(fname + 2);
+	else
+		info->name = xstrdup(fname);
 	info->modname = filename2modname(
 			bb_get_last_path_component_nostrip(fname),
 			NULL
