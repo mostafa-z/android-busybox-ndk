@@ -363,7 +363,7 @@ static void stone(const int *a, int n, const int *b, int *J, int pref)
 }
 
 struct line {
-	/* 'serial' is not used in the begining, so we reuse it
+	/* 'serial' is not used in the beginning, so we reuse it
 	 * to store line offsets, thus reducing memory pressure
 	 */
 	union {
@@ -433,7 +433,7 @@ static void fetch(FILE_and_pos_t *ft, const off_t *ix, int a, int b, int ch)
 		for (j = 0, col = 0; j < ix[i] - ix[i - 1]; j++) {
 			int c = fgetc(ft->ft_fp);
 			if (c == EOF) {
-				printf("\n\\ No newline at end of file\n");
+				puts("\n\\ No newline at end of file");
 				return;
 			}
 			ft->ft_pos++;
@@ -658,8 +658,8 @@ static bool diff(FILE* fp[2], char *file[2])
 				}
 
 				for (j = 0; j < 2; j++)
-					for (k = v[j].a; k < v[j].b; k++)
-						nonempty |= (ix[j][k+1] - ix[j][k] != 1);
+					for (k = v[j].a; k <= v[j].b; k++)
+						nonempty |= (ix[j][k] - ix[j][k - 1] != 1);
 
 				vec = xrealloc_vector(vec, 6, ++idx);
 				memcpy(vec[idx], v, sizeof(v));
@@ -692,7 +692,7 @@ static bool diff(FILE* fp[2], char *file[2])
 					continue;
 				printf(",%d", (a < b) ? b - a + 1 : 0);
 			}
-			printf(" @@\n");
+			puts(" @@");
 			/*
 			 * Output changes in "unified" diff format--the old and new lines
 			 * are printed together.

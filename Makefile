@@ -1,6 +1,6 @@
 VERSION = 1
-PATCHLEVEL = 24
-SUBLEVEL = 1
+PATCHLEVEL = 25
+SUBLEVEL = 0
 EXTRAVERSION = -Dorimanx
 NAME = Unnamed
 
@@ -476,7 +476,6 @@ libs-y		:= \
 		init/ \
 		libbb/ \
 		libpwdgrp/ \
-		libres/ \
 		loginutils/ \
 		mailutils/ \
 		miscutils/ \
@@ -553,7 +552,7 @@ export	INSTALL_PATH ?= /boot
 #
 # INSTALL_MOD_PATH specifies a prefix to MODLIB for module directory
 # relocations required by build roots.  This is not defined in the
-# makefile but the arguement can be passed to make if needed.
+# makefile but the argument can be passed to make if needed.
 #
 
 MODLIB	= $(INSTALL_MOD_PATH)/lib/modules/$(KERNELRELEASE)

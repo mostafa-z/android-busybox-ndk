@@ -22,12 +22,11 @@
 /* X/OPEN tells us to use <sys/{types,ipc,sem}.h> for semctl() */
 /* X/OPEN tells us to use <sys/{types,ipc,msg}.h> for msgctl() */
 #include <sys/ipc.h>
-#include <linux/shm.h>
-#include <linux/msg.h>
-#include <linux/sem.h>
+#include <sys/shm.h>
+#include <sys/msg.h>
+#include <sys/sem.h>
 
-#if (defined(__GNU_LIBRARY__) && !defined(_SEM_SEMUN_UNDEFINED)) || \
-    defined(__ANDROID__)
+#if defined(__GNU_LIBRARY__) && !defined(_SEM_SEMUN_UNDEFINED)
 /* union semun is defined by including <sys/sem.h> */
 #else
 /* according to X/OPEN we have to define it ourselves */
@@ -120,7 +119,7 @@ int ipcrm_main(int argc, char **argv)
 
 			if (remove_ids(what, &argv[2]))
 				fflush_stdout_and_exit(EXIT_FAILURE);
-			printf("resource(s) deleted\n");
+			puts("resource(s) deleted");
 			return 0;
 		}
 	}

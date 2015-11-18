@@ -5,17 +5,6 @@
 #ifndef UDHCP_DHCPC_H
 #define UDHCP_DHCPC_H 1
 
-/* Add missing defines in <linux/if_packet.h> */
-
-#define PACKET_AUXDATA 8
-struct tpacket_auxdata {
-   uint32_t tp_status;
-   uint32_t p_len;
-   uint32_t tp_snaplen;
-   uint16_t tp_mac;
-   uint16_t tp_net;
-};
-
 PUSH_AND_SET_FUNCTION_VISIBILITY_TO_HIDDEN
 
 struct client_config_t {

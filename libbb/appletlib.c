@@ -130,7 +130,7 @@ void FAST_FUNC bb_show_usage(void)
 			full_write2_str(applet_name);
 			full_write2_str(" ");
 			full_write2_str(p);
-			full_write2_str("\n\n");
+			full_write2_str("\n");
 		}
 		if (ENABLE_FEATURE_CLEAN_UP)
 			dealloc_usage_messages((char*)usage_string);
@@ -437,7 +437,7 @@ static void parse_config_file(void)
 						goto pe_label;
 					}
 					*e = ':'; /* get_uidgid needs USER:GROUP syntax */
-					if (get_uidgid(&sct->m_ugid, s, /*allow_numeric:*/ 1) == 0) {
+					if (get_uidgid(&sct->m_ugid, s) == 0) {
 						errmsg = "unknown user/group";
 						goto pe_label;
 					}
@@ -457,7 +457,6 @@ static void parse_config_file(void)
 			errmsg = "keyword outside section";
 			goto pe_label;
 		}
-
 	} /* while (1) */
 
  pe_label:
@@ -624,7 +623,7 @@ static int busybox_main(char **argv)
 		output_width = 80;
 		if (ENABLE_FEATURE_AUTOWIDTH) {
 			/* Obtain the terminal width */
-			get_terminal_width_height(0, &output_width, NULL);
+			output_width = get_terminal_width(2);
 		}
 
 		dup2(1, 2);
@@ -642,10 +641,19 @@ static int busybox_main(char **argv)
 			)
 			"   or: function [arguments]...\n"
 			"\n"
+			IF_NOT_FEATURE_SH_STANDALONE(
 			"\tBusyBox is a multi-call binary that combines many common Unix\n"
 			"\tutilities into a single executable.  Most people will create a\n"
 			"\tlink to busybox for each function they wish to use and BusyBox\n"
 			"\twill act like whatever it was invoked as.\n"
+			)
+			IF_FEATURE_SH_STANDALONE(
+			"\tBusyBox is a multi-call binary that combines many common Unix\n"
+			"\tutilities into a single executable.  The shell in this build\n"
+			"\tis configured to run built-in utilities without $PATH search.\n"
+			"\tYou don't need to install a link to busybox for each utility.\n"
+			"\tTo run external program, use full path (/sbin/ip instead of ip).\n"
+			)
 			"\n"
 			"Currently defined functions:\n"
 		);
@@ -748,23 +756,25 @@ void FAST_FUNC run_applet_no_and_exit(int applet_no, char **argv)
 	xfunc_error_retval = EXIT_FAILURE;
 	applet_name = APPLET_NAME(applet_no);
 
-#if defined APPLET_NO_test
 	/* Special case. POSIX says "test --help"
 	 * should be no different from e.g. "test --foo".
 	 * Thus for "test", we skip --help check.
+	 * "true" and "false" are also special.
 	 */
-	if (applet_no != APPLET_NO_test)
+	if (1
+#if defined APPLET_NO_test
+	 && applet_no != APPLET_NO_test
 #endif
-	{
-		if (argc == 2 && strcmp(argv[1], "--help") == 0) {
+#if defined APPLET_NO_true
+	 && applet_no != APPLET_NO_true
+#endif
 #if defined APPLET_NO_false
-			/* Someone insisted that "false --help" must exit 1. Sigh */
-			if (applet_no != APPLET_NO_false)
+	 && applet_no != APPLET_NO_false
 #endif
-			{
-				/* Make "foo --help" exit with 0: */
-				xfunc_error_retval = 0;
-			}
+	) {
+		if (argc == 2 && strcmp(argv[1], "--help") == 0) {
+			/* Make "foo --help" exit with 0: */
+			xfunc_error_retval = 0;
 			bb_show_usage();
 		}
 	}

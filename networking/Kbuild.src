@@ -9,11 +9,9 @@ lib-y:=
 INSERT
 lib-$(CONFIG_ARP)          += arp.o interface.o
 lib-$(CONFIG_ARPING)       += arping.o
-lib-$(CONFIG_ARPING)       += ether_ntoa_r.o
 lib-$(CONFIG_BRCTL)        += brctl.o
 lib-$(CONFIG_DNSD)         += dnsd.o
 lib-$(CONFIG_ETHER_WAKE)   += ether-wake.o
-lib-$(CONFIG_ETHER_WAKE)   += ether_aton_r.o ether_ntoa_r.o
 lib-$(CONFIG_FAKEIDENTD)   += isrv_identd.o isrv.o
 lib-$(CONFIG_FTPD)         += ftpd.o
 lib-$(CONFIG_FTPGET)       += ftpgetput.o
@@ -28,7 +26,6 @@ lib-$(CONFIG_INETD)        += inetd.o
 lib-$(CONFIG_IP)           += ip.o
 lib-$(CONFIG_IPCALC)       += ipcalc.o
 lib-$(CONFIG_NAMEIF)       += nameif.o
-lib-$(CONFIG_NAMEIF)       += ether_aton_r.o
 lib-$(CONFIG_NC)           += nc.o
 lib-$(CONFIG_NETSTAT)      += netstat.o
 lib-$(CONFIG_NSLOOKUP)     += nslookup.o
@@ -44,7 +41,6 @@ lib-$(CONFIG_TFTPD)        += tftp.o
 lib-$(CONFIG_TRACEROUTE)   += traceroute.o
 lib-$(CONFIG_TUNCTL)       += tunctl.o
 lib-$(CONFIG_VCONFIG)      += vconfig.o
-lib-$(CONFIG_WGET)         += wget.o
 lib-$(CONFIG_ZCIP)         += zcip.o
 
 lib-$(CONFIG_TCPSVD)       += tcpudp.o tcpudp_perhost.o
