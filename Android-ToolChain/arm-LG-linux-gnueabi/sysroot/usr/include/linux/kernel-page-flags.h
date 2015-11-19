@@ -30,7 +30,6 @@
 #define KPF_NOPAGE		20
 
 #define KPF_KSM			21
-#define KPF_THP			22
 
 
 #endif /* LINUX_KERNEL_PAGE_FLAGS_H */

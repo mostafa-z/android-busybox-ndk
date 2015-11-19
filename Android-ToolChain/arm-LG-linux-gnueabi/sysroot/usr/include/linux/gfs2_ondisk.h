@@ -22,8 +22,6 @@
 #define GFS2_LIVE_LOCK		1
 #define GFS2_TRANS_LOCK		2
 #define GFS2_RENAME_LOCK	3
-#define GFS2_CONTROL_LOCK	4
-#define GFS2_MOUNTED_LOCK	5
 
 /* Format numbers for various metadata types */
 
@@ -168,7 +166,6 @@ struct gfs2_rindex {
 #define GFS2_RGF_METAONLY	0x00000002
 #define GFS2_RGF_DATAONLY	0x00000004
 #define GFS2_RGF_NOALLOC	0x00000008
-#define GFS2_RGF_TRIMMED	0x00000010
 
 struct gfs2_rgrp {
 	struct gfs2_meta_header rg_header;

@@ -48,8 +48,8 @@
 #define PORT_TEGRA	20	/* NVIDIA Tegra internal UART */
 #define PORT_XR17D15X	21	/* Exar XR17D15x UART */
 #define PORT_BRCM_TRUMANAGE	25
-#define PORT_ALTR_16550_F32 26 /* Altera 16550 UART with 32 FIFOs */
-#define PORT_ALTR_16550_F64 27 /* Altera 16550 UART with 64 FIFOs */
+#define PORT_ALTR_16550_F32 26	/* Altera 16550 UART with 32 FIFOs */
+#define PORT_ALTR_16550_F64 27	/* Altera 16550 UART with 64 FIFOs */
 #define PORT_ALTR_16550_F128 28 /* Altera 16550 UART with 128 FIFOs */
 #define PORT_MAX_8250	28	/* max port ID */
 
@@ -210,12 +210,6 @@
 
 /* Xilinx PSS UART */
 #define PORT_XUARTPS	98
-
-/* Atheros AR933X SoC */
-#define PORT_AR933X	99
-
-/* Energy Micro efm32 SoC */
-#define PORT_EFMUART   100
 
 
 #endif /* LINUX_SERIAL_CORE_H */
