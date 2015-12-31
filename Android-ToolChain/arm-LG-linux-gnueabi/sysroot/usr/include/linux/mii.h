@@ -9,6 +9,7 @@
 #define __LINUX_MII_H__
 
 #include <linux/types.h>
+#include <linux/ethtool.h>
 
 /* Generic MII registers. */
 #define MII_BMCR		0x00	/* Basic mode control register */
