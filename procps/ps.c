@@ -556,20 +556,13 @@ static void format_process(const procps_status_t *ps)
 # define DEFAULT_O_STR    ("pid,user" IF_FEATURE_PS_TIME(",time") ",args")
 #endif
 
-#if ENABLE_FEATURE_SHOW_THREADS || ENABLE_SELINUX
 int ps_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
 int ps_main(int argc UNUSED_PARAM, char **argv)
-#else
-int ps_main(int argc) MAIN_EXTERNALLY_VISIBLE;
-int ps_main(int argc UNUSED_PARAM)
-#endif
 {
 	procps_status_t *p;
 	llist_t* opt_o = NULL;
 	char default_o[sizeof(DEFAULT_O_STR)];
-#if ENABLE_FEATURE_SHOW_THREADS || ENABLE_SELINUX
 	int opt;
-#endif
 	enum {
 		OPT_Z = (1 << 0),
 		OPT_o = (1 << 1),
@@ -600,9 +593,7 @@ int ps_main(int argc UNUSED_PARAM)
 	 * it also supports -L where it shows tids as LWP column.
 	 */
 	opt_complementary = "o::";
-#if ENABLE_FEATURE_SHOW_THREADS || ENABLE_SELINUX
 	opt = getopt32(argv, "Zo:aAdefl"IF_FEATURE_SHOW_THREADS("T"), &opt_o);
-#endif
 	if (opt_o) {
 		do {
 			parse_o(llist_pop(&opt_o));
