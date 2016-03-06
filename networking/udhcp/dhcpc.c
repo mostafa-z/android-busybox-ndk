@@ -113,7 +113,7 @@ static const uint8_t len_of_option_as_string[] = {
 	[OPTION_IP              ] = sizeof("255.255.255.255 "),
 	[OPTION_IP_PAIR         ] = sizeof("255.255.255.255 ") * 2,
 	[OPTION_STATIC_ROUTES   ] = sizeof("255.255.255.255/32 255.255.255.255 "),
-	[OPTION_6RD             ] = sizeof("32 128 ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff 255.255.255.255 "),
+	[OPTION_6RD             ] = sizeof("132 128 ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff 255.255.255.255 "),
 	[OPTION_STRING          ] = 1,
 	[OPTION_STRING_HOST     ] = 1,
 #if ENABLE_FEATURE_UDHCP_RFC3397
@@ -222,7 +222,7 @@ static NOINLINE char *xmalloc_optname_optval(uint8_t *option, const struct dhcp_
 	type = optflag->flags & OPTION_TYPE_MASK;
 	optlen = dhcp_option_lengths[type];
 	upper_length = len_of_option_as_string[type]
-		* ((unsigned)(len + optlen - 1) / (unsigned)optlen);
+		* ((unsigned)(len + optlen) / (unsigned)optlen);
 
 	dest = ret = xmalloc(upper_length + strlen(opt_name) + 2);
 	dest += sprintf(ret, "%s=", opt_name);
@@ -675,10 +675,10 @@ static void add_client_options(struct dhcp_packet *packet)
  * client reverts to using the IP broadcast address.
  */
 
-static int raw_bcast_from_client_config_ifindex(struct dhcp_packet *packet)
+static int raw_bcast_from_client_config_ifindex(struct dhcp_packet *packet, uint32_t src_nip)
 {
 	return udhcp_send_raw_packet(packet,
-		/*src*/ INADDR_ANY, CLIENT_PORT,
+		/*src*/ src_nip, CLIENT_PORT,
 		/*dst*/ INADDR_BROADCAST, SERVER_PORT, MAC_BCAST_ADDR,
 		client_config.ifindex);
 }
@@ -689,7 +689,7 @@ static int bcast_or_ucast(struct dhcp_packet *packet, uint32_t ciaddr, uint32_t 
 		return udhcp_send_kernel_packet(packet,
 			ciaddr, CLIENT_PORT,
 			server, SERVER_PORT);
-	return raw_bcast_from_client_config_ifindex(packet);
+	return raw_bcast_from_client_config_ifindex(packet, ciaddr);
 }
 
 /* Broadcast a DHCP discover packet to the network, with an optionally requested IP */
@@ -715,7 +715,7 @@ static NOINLINE int send_discover(uint32_t xid, uint32_t requested)
 	add_client_options(&packet);
 
 	bb_info_msg("Sending discover...");
-	return raw_bcast_from_client_config_ifindex(&packet);
+	return raw_bcast_from_client_config_ifindex(&packet, INADDR_ANY);
 }
 
 /* Broadcast a DHCP request message */
@@ -759,7 +759,7 @@ static NOINLINE int send_select(uint32_t xid, uint32_t server, uint32_t requeste
 
 	addr.s_addr = requested;
 	bb_info_msg("Sending select for %s...", inet_ntoa(addr));
-	return raw_bcast_from_client_config_ifindex(&packet);
+	return raw_bcast_from_client_config_ifindex(&packet, INADDR_ANY);
 }
 
 /* Unicast or broadcast a DHCP renew message */
@@ -827,7 +827,7 @@ static NOINLINE int send_decline(/*uint32_t xid,*/ uint32_t server, uint32_t req
 	udhcp_add_simple_option(&packet, DHCP_SERVER_ID, server);
 
 	bb_info_msg("Sending decline...");
-	return raw_bcast_from_client_config_ifindex(&packet);
+	return raw_bcast_from_client_config_ifindex(&packet, INADDR_ANY);
 }
 #endif
 
@@ -1501,7 +1501,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
 				packet_num = 0;
 				continue;
 			case REQUESTING:
-				if (!discover_retries || packet_num < discover_retries) {
+				if (packet_num < 3) {
 					/* send broadcast select packet */
 					send_select(xid, server_addr, requested_ip);
 					timeout = discover_timeout;
