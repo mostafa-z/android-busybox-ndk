@@ -145,6 +145,25 @@ int FAST_FUNC find_applet_by_name(const char *name)
 	int j;
 	const char *p;
 
+/* The commented-out word-at-a-time code is ~40% faster, but +160 bytes.
+ * "Faster" here saves ~0.5 microsecond of real time - not worth it.
+ */
+#if 0 /*BB_UNALIGNED_MEMACCESS_OK && BB_LITTLE_ENDIAN*/
+	uint32_t n32;
+
+	/* Handle all names < 2 chars long early */
+	if (name[0] == '\0')
+		return -1; /* "" is not a valid applet name */
+	if (name[1] == '\0') {
+		if (!ENABLE_TEST)
+			return -1; /* 1-char name is not valid */
+		if (name[0] != ']')
+			return -1; /* 1-char name which isn't "[" is not valid */
+		/* applet "[" is always applet #0: */
+		return 0;
+	}
+#endif
+
 	p = applet_names;
 	i = 0;
 #if KNOWN_APPNAME_OFFSETS <= 0
@@ -166,7 +185,62 @@ int FAST_FUNC find_applet_by_name(const char *name)
 	//bb_error_msg("name:'%s' starting from:'%s' i:%u max:%u", name, p, i, max);
 #endif
 
-	/* Open-coding without strcmp/strlen calls for speed */
+	/* Open-coded linear search without strcmp/strlen calls for speed */
+
+#if 0 /*BB_UNALIGNED_MEMACCESS_OK && BB_LITTLE_ENDIAN*/
+	/* skip "[\0" name, it's surely not it */
+	if (ENABLE_TEST && LONE_CHAR(p, '['))
+		i++, p += 2;
+	/* All remaining applet names in p[] are at least 2 chars long */
+	/* name[] is also at least 2 chars long */
+
+	n32 = (name[0] << 0) | (name[1] << 8) | (name[2] << 16);
+	while (i < max) {
+		uint32_t p32;
+		char ch;
+
+		/* Quickly check match of the first 3 bytes */
+		move_from_unaligned32(p32, p);
+		p += 3;
+		if ((p32 & 0x00ffffff) != n32) {
+			/* Most likely case: 3 first bytes do not match */
+			i++;
+			if ((p32 & 0x00ff0000) == '\0')
+				continue; // p[2] was NUL
+			p++;
+			if ((p32 & 0xff000000) == '\0')
+				continue; // p[3] was NUL
+			/* p[0..3] aren't matching and none is NUL, check the rest */
+			while (*p++ != '\0')
+				continue;
+			continue;
+		}
+
+		/* Unlikely branch: first 3 bytes ([0..2]) match */
+		if ((p32 & 0x00ff0000) == '\0') {
+			/* name is 2-byte long, it is full match */
+			//bb_error_msg("found:'%s' i:%u", name, i);
+			return i;
+		}
+		/* Check remaining bytes [3..NUL] */
+		ch = (p32 >> 24);
+		j = 3;
+		while (ch == name[j]) {
+			if (ch == '\0') {
+				//bb_error_msg("found:'%s' i:%u", name, i);
+				return i;
+			}
+			ch = *++p;
+			j++;
+		}
+		/* Not a match. Skip it, including NUL */
+		while (ch != '\0')
+			ch = *++p;
+		p++;
+		i++;
+	}
+	return -1;
+#else
 	while (i < max) {
 		char ch;
 		j = 0;
@@ -189,6 +263,7 @@ int FAST_FUNC find_applet_by_name(const char *name)
 		i++;
 	}
 	return -1;
+#endif
 }
 
 
@@ -828,6 +903,19 @@ int lbb_main(char **argv)
 int main(int argc UNUSED_PARAM, char **argv)
 #endif
 {
+#if 0
+	/* TODO: find a use for a block of memory between end of .bss
+	 * and end of page. For example, I'm getting "_end:0x812e698 2408 bytes"
+	 * - more than 2k of wasted memory (in this particular build)
+	 * *per each running process*!
+	 * (If your linker does not generate "_end" name, weak attribute
+	 * makes &_end == NULL, end_len == 0 here.)
+	 */
+	extern char _end[] __attribute__((weak));
+	unsigned end_len = (-(int)_end) & 0xfff;
+	printf("_end:%p %u bytes\n", &_end, end_len);
+#endif
+
 	/* Tweak malloc for reduced memory consumption */
 #ifdef M_TRIM_THRESHOLD
 	/* M_TRIM_THRESHOLD is the maximum amount of freed top-most memory
