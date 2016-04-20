@@ -11500,7 +11500,7 @@ parsesub: {
 	 || (c != '(' && c != '{' && !is_name(c) && !is_special(c))
 	) {
 #if ENABLE_ASH_BASH_COMPAT
-		if (c == '\'')
+		if (syntax != DQSYNTAX && c == '\'')
 			bash_dollar_squote = 1;
 		else
 #endif
@@ -12597,7 +12597,8 @@ helpcmd(int argc UNUSED_PARAM, char **argv UNUSED_PARAM)
 				out1fmt("\n");
 				col = 0;
 			}
-			a += strlen(a) + 1;
+			while (*a++ != '\0')
+				continue;
 		}
 	}
 # endif
