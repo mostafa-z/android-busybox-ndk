@@ -86,6 +86,7 @@
 //usage:       "bar\n"
 
 #include "libbb.h"
+#include "common_bufsiz.h"
 #include "xregex.h"
 
 #if 0
@@ -161,8 +162,9 @@ struct globals {
 		int len;    /* Space allocated */
 	} pipeline;
 } FIX_ALIASING;
-#define G (*(struct globals*)&bb_common_bufsiz1)
+#define G (*(struct globals*)bb_common_bufsiz1)
 #define INIT_G() do { \
+	setup_common_bufsiz(); \
 	BUILD_BUG_ON(sizeof(G) > COMMON_BUFSIZE); \
 	G.sed_cmd_tail = &G.sed_cmd_head; \
 } while (0)
@@ -471,7 +473,7 @@ static int parse_subst_cmd(sed_cmd_t *sed_cmd, const char *substr)
  */
 static const char *parse_cmd_args(sed_cmd_t *sed_cmd, const char *cmdstr)
 {
-	static const char cmd_letters[] = "saicrw:btTydDgGhHlnNpPqx={}";
+	static const char cmd_letters[] ALIGN1 = "saicrw:btTydDgGhHlnNpPqx={}";
 	enum {
 		IDX_s = 0,
 		IDX_a,
