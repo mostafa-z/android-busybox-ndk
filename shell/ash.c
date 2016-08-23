@@ -323,7 +323,7 @@ struct globals_misc {
 #define S_DFL      1            /* default signal handling (SIG_DFL) */
 #define S_CATCH    2            /* signal is caught */
 #define S_IGN      3            /* signal is ignored (SIG_IGN) */
-#define S_HARD_IGN 4            /* signal is ignored permenantly */
+#define S_HARD_IGN 4            /* signal is ignored permanently */
 
 	/* indicates specified signal received */
 	uint8_t gotsig[NSIG - 1]; /* offset by 1: "signal" 0 is meaningless */
@@ -6323,6 +6323,8 @@ subevalvar(char *p, char *varname, int strloc, int subtype,
 
 #if ENABLE_ASH_BASH_COMPAT
 	case VSSUBSTR:
+//TODO: support more general format ${v:EXPR:EXPR},
+// where EXPR follows $(()) rules
 		loc = str = stackblock() + strloc;
 		/* Read POS in ${var:POS:LEN} */
 		pos = atoi(loc); /* number(loc) errors out on "1:4" */
@@ -9024,7 +9026,20 @@ execcmd(int argc UNUSED_PARAM, char **argv)
 		iflag = 0;              /* exit on error */
 		mflag = 0;
 		optschanged();
+		/* We should set up signals for "exec CMD"
+		 * the same way as for "CMD" without "exec".
+		 * But optschanged->setinteractive->setsignal
+		 * still thought we are a root shell. Therefore, for example,
+		 * SIGQUIT is still set to IGN. Fix it:
+		 */
+		shlvl++;
+		setsignal(SIGQUIT);
+		/*setsignal(SIGTERM); - unnecessary because of iflag=0 */
+		/*setsignal(SIGTSTP); - unnecessary because of mflag=0 */
+		/*setsignal(SIGTTOU); - unnecessary because of mflag=0 */
+
 		shellexec(argv + 1, pathval(), 0);
+		/* NOTREACHED */
 	}
 	return 0;
 }
@@ -11564,15 +11579,18 @@ parsesub: {
 		STPUTC('=', out);
 		flags = 0;
 		if (subtype == 0) {
+			static const char types[] ALIGN1 = "}-+?=";
 			/* ${VAR...} but not $VAR or ${#VAR} */
 			/* c == first char after VAR */
 			switch (c) {
 			case ':':
 				c = pgetc();
 #if ENABLE_ASH_BASH_COMPAT
-				if (c == ':' || c == '$' || isdigit(c)) {
-//TODO: support more general format ${v:EXPR:EXPR},
-// where EXPR follows $(()) rules
+				/* This check is only needed to not misinterpret
+				 * ${VAR:-WORD}, ${VAR:+WORD}, ${VAR:=WORD}, ${VAR:?WORD}
+				 * constructs.
+				 */
+				if (!strchr(types, c)) {
 					subtype = VSSUBSTR;
 					pungetc();
 					break; /* "goto do_pungetc" is bigger (!) */
@@ -11581,7 +11599,6 @@ parsesub: {
 				flags = VSNUL;
 				/*FALLTHROUGH*/
 			default: {
-				static const char types[] ALIGN1 = "}-+?=";
 				const char *p = strchr(types, c);
 				if (p == NULL)
 					goto badsub;

@@ -107,9 +107,9 @@ enum {
 #endif
 };
 #if ENABLE_FEATURE_PIDFILE
-# define OPTION_STR "+ansfFi:r:It:u:d:m:pqlx:Mk"
+# define OPTION_STR "+ansfFi:r:It:+u:+d:+m:pqlx:Mk"
 #else
-# define OPTION_STR "+ansfFi:r:It:u:d:m:pqlx:M"
+# define OPTION_STR "+ansfFi:r:It:+u:+d:+m:pqlx:M"
 #endif
 
 enum { // interface status
@@ -358,8 +358,12 @@ static void up_iface(void)
 		ifrequest.ifr_flags |= IFF_UP;
 		/* Let user know we mess up with interface */
 		bb_error_msg("upping interface");
-		if (network_ioctl(SIOCSIFFLAGS, &ifrequest, "setting interface flags") < 0)
-			xfunc_die();
+		if (network_ioctl(SIOCSIFFLAGS, &ifrequest, "setting interface flags") < 0) {
+			if (errno != ENODEV)
+				xfunc_die();
+			G.iface_exists = 0;
+			return;
+		}
 	}
 
 #if 0 /* why do we mess with IP addr? It's not our business */
@@ -560,7 +564,6 @@ int ifplugd_main(int argc UNUSED_PARAM, char **argv)
 
 	INIT_G();
 
-	opt_complementary = "t+:u+:d+";
 	opts = getopt32(argv, OPTION_STR,
 		&G.iface, &G.script_name, &G.poll_time, &G.delay_up,
 		&G.delay_down, &G.api_mode, &G.extra_arg);

@@ -10,7 +10,8 @@
 //kbuild:lib-$(CONFIG_SENDMAIL) += sendmail.o mail.o
 
 //usage:#define sendmail_trivial_usage
-//usage:       "[OPTIONS] [RECIPIENT_EMAIL]..."
+//usage:       "[-tv] [-f SENDER] [-amLOGIN 4<user_pass.txt | -auUSER -apPASS]"
+//usage:     "\n		[-w SECS] [-H 'PROG ARGS' | -S HOST] [RECIPIENT_EMAIL]..."
 //usage:#define sendmail_full_usage "\n\n"
 //usage:       "Read email from stdin and send it\n"
 //usage:     "\nStandard options:"
@@ -18,27 +19,24 @@
 //usage:     "\n	-f SENDER	For use in MAIL FROM:<sender>. Can be empty string"
 //usage:     "\n			Default: -auUSER, or username of current UID"
 //usage:     "\n	-o OPTIONS	Various options. -oi implied, others are ignored"
-//usage:     "\n	-i		-oi synonym. implied and ignored"
+//usage:     "\n	-i		-oi synonym, implied and ignored"
 //usage:     "\n"
 //usage:     "\nBusybox specific options:"
 //usage:     "\n	-v		Verbose"
 //usage:     "\n	-w SECS		Network timeout"
-//usage:     "\n	-H 'PROG ARGS'	Run connection helper"
-//usage:     "\n			Examples:"
-//usage:     "\n			-H 'exec openssl s_client -quiet -tls1 -starttls smtp"
-//usage:     "\n				-connect smtp.gmail.com:25' <email.txt"
-//usage:     "\n				[4<username_and_passwd.txt | -auUSER -apPASS]"
-//usage:     "\n			-H 'exec openssl s_client -quiet -tls1"
-//usage:     "\n				-connect smtp.gmail.com:465' <email.txt"
-//usage:     "\n				[4<username_and_passwd.txt | -auUSER -apPASS]"
-//usage:     "\n	-S HOST[:PORT]	Server"
-//usage:     "\n	-auUSER		Username for AUTH LOGIN"
-//usage:     "\n	-apPASS 	Password for AUTH LOGIN"
-////usage:     "\n	-amMETHOD	Authentication method. Ignored. LOGIN is implied"
+//usage:     "\n	-H 'PROG ARGS'	Run connection helper. Examples:"
+//usage:     "\n		openssl s_client -quiet -tls1 -starttls smtp -connect smtp.gmail.com:25"
+//usage:     "\n		openssl s_client -quiet -tls1 -connect smtp.gmail.com:465"
+//usage:     "\n	-S HOST[:PORT]	Server (default $SMTPHOST or 127.0.0.1)"
+//usage:     "\n	-amLOGIN	Log in using AUTH LOGIN (-amCRAM-MD5 not supported)"
+//usage:     "\n	-auUSER		Username for AUTH"
+//usage:     "\n	-apPASS 	Password for AUTH"
 //usage:     "\n"
-//usage:     "\nOther options are silently ignored; -oi -t is implied"
+//usage:     "\nIf no -a options are given, authentication is not done."
+//usage:     "\nIf -amLOGIN is given but no -au/-ap, user/password is read from fd #4."
+//usage:     "\nOther options are silently ignored; -oi is implied."
 //usage:	IF_MAKEMIME(
-//usage:     "\nUse makemime to create emails with attachments"
+//usage:     "\nUse makemime to create emails with attachments."
 //usage:	)
 
 /* Currently we don't sanitize or escape user-supplied SENDER and RECIPIENT_EMAILs.
@@ -247,11 +245,11 @@ int sendmail_main(int argc UNUSED_PARAM, char **argv)
 
 	// parse options
 	// -v is a counter, -H and -S are mutually exclusive, -a is a list
-	opt_complementary = "vv:w+:H--S:S--H:a::";
+	opt_complementary = "vv:H--S:S--H";
 	// N.B. since -H and -S are mutually exclusive they do not interfere in opt_connect
 	// -a is for ssmtp (http://downloads.openwrt.org/people/nico/man/man8/ssmtp.8.html) compatibility,
 	// it is still under development.
-	opts = getopt32(argv, "tf:o:iw:H:S:a::v", &opt_from, NULL,
+	opts = getopt32(argv, "tf:o:iw:+H:S:a:*:v", &opt_from, NULL,
 			&timeout, &opt_connect, &opt_connect, &list, &verbose);
 	//argc -= optind;
 	argv += optind;
