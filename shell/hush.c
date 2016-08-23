@@ -103,6 +103,9 @@
 #else
 # define CLEAR_RANDOM_T(rnd) ((void)0)
 #endif
+#ifndef F_DUPFD_CLOEXEC
+# define F_DUPFD_CLOEXEC F_DUPFD
+#endif
 #ifndef PIPE_BUF
 # define PIPE_BUF 4096  /* amount of buffering in a pipe */
 #endif
@@ -711,6 +714,13 @@ enum {
 };
 
 
+struct FILE_list {
+	struct FILE_list *next;
+	FILE *fp;
+	int fd;
+};
+
+
 /* "Globals" within this file */
 /* Sorted roughly by size (smaller offsets == smaller code) */
 struct globals {
@@ -802,6 +812,7 @@ struct globals {
 	unsigned handled_SIGCHLD;
 	smallint we_have_children;
 #endif
+	struct FILE_list *FILE_list;
 	/* Which signals have non-DFL handler (even with no traps set)?
 	 * Set at the start to:
 	 * (SIGQUIT + maybe SPECIAL_INTERACTIVE_SIGS + maybe SPECIAL_JOBSTOP_SIGS)
@@ -1252,6 +1263,91 @@ static void free_strings(char **strings)
 }
 
 
+static int xdup_and_close(int fd, int F_DUPFD_maybe_CLOEXEC)
+{
+	/* We avoid taking stdio fds. Mimicking ash: use fds above 9 */
+	int newfd = fcntl(fd, F_DUPFD_maybe_CLOEXEC, 10);
+	if (newfd < 0) {
+		/* fd was not open? */
+		if (errno == EBADF)
+			return fd;
+		xfunc_die();
+	}
+	close(fd);
+	return newfd;
+}
+
+
+/* Manipulating the list of open FILEs */
+static FILE *remember_FILE(FILE *fp)
+{
+	if (fp) {
+		struct FILE_list *n = xmalloc(sizeof(*n));
+		n->next = G.FILE_list;
+		G.FILE_list = n;
+		n->fp = fp;
+		n->fd = fileno(fp);
+		close_on_exec_on(n->fd);
+	}
+	return fp;
+}
+static void fclose_and_forget(FILE *fp)
+{
+	struct FILE_list **pp = &G.FILE_list;
+	while (*pp) {
+		struct FILE_list *cur = *pp;
+		if (cur->fp == fp) {
+			*pp = cur->next;
+			free(cur);
+			break;
+		}
+		pp = &cur->next;
+	}
+	fclose(fp);
+}
+static int save_FILEs_on_redirect(int fd)
+{
+	struct FILE_list *fl = G.FILE_list;
+	while (fl) {
+		if (fd == fl->fd) {
+			/* We use it only on script files, they are all CLOEXEC */
+			fl->fd = xdup_and_close(fd, F_DUPFD_CLOEXEC);
+			return 1;
+		}
+		fl = fl->next;
+	}
+	return 0;
+}
+static void restore_redirected_FILEs(void)
+{
+	struct FILE_list *fl = G.FILE_list;
+	while (fl) {
+		int should_be = fileno(fl->fp);
+		if (fl->fd != should_be) {
+			xmove_fd(fl->fd, should_be);
+			fl->fd = should_be;
+		}
+		fl = fl->next;
+	}
+}
+#if ENABLE_FEATURE_SH_STANDALONE
+static void close_all_FILE_list(void)
+{
+	struct FILE_list *fl = G.FILE_list;
+	while (fl) {
+		/* fclose would also free FILE object.
+		 * It is disastrous if we share memory with a vforked parent.
+		 * I'm not sure we never come here after vfork.
+		 * Therefore just close fd, nothing more.
+		 */
+		/*fclose(fl->fp); - unsafe */
+		close(fl->fd);
+		fl = fl->next;
+	}
+}
+#endif
+
+
 /* Helpers for setting new $n and restoring them back
  */
 typedef struct save_arg_t {
@@ -1477,19 +1573,50 @@ static sighandler_t install_sighandler(int sig, sighandler_t handler)
 	return old_sa.sa_handler;
 }
 
+static void hush_exit(int exitcode) NORETURN;
+static void fflush_and__exit(void) NORETURN;
+static void restore_ttypgrp_and__exit(void) NORETURN;
+
+static void restore_ttypgrp_and__exit(void)
+{
+	/* xfunc has failed! die die die */
+	/* no EXIT traps, this is an escape hatch! */
+	G.exiting = 1;
+	hush_exit(xfunc_error_retval);
+}
+
+/* Needed only on some libc:
+ * It was observed that on exit(), fgetc'ed buffered data
+ * gets "unwound" via lseek(fd, -NUM, SEEK_CUR).
+ * With the net effect that even after fork(), not vfork(),
+ * exit() in NOEXECed applet in "sh SCRIPT":
+ *	noexec_applet_here
+ *	echo END_OF_SCRIPT
+ * lseeks fd in input FILE object from EOF to "e" in "echo END_OF_SCRIPT".
+ * This makes "echo END_OF_SCRIPT" executed twice.
+ * Similar problems can be seen with die_if_script() -> xfunc_die()
+ * and in `cmd` handling.
+ * If set as die_func(), this makes xfunc_die() exit via _exit(), not exit():
+ */
+static void fflush_and__exit(void)
+{
+	fflush_all();
+	_exit(xfunc_error_retval);
+}
+
 #if ENABLE_HUSH_JOB
 
-static void xfunc_has_died(void);
 /* After [v]fork, in child: do not restore tty pgrp on xfunc death */
-# define disable_restore_tty_pgrp_on_exit() (die_func = NULL)
+# define disable_restore_tty_pgrp_on_exit() (die_func = fflush_and__exit)
 /* After [v]fork, in parent: restore tty pgrp on xfunc death */
-# define enable_restore_tty_pgrp_on_exit()  (die_func = xfunc_has_died)
+# define enable_restore_tty_pgrp_on_exit()  (die_func = restore_ttypgrp_and__exit)
 
 /* Restores tty foreground process group, and exits.
  * May be called as signal handler for fatal signal
  * (will resend signal to itself, producing correct exit state)
  * or called directly with -EXITCODE.
- * We also call it if xfunc is exiting. */
+ * We also call it if xfunc is exiting.
+ */
 static void sigexit(int sig) NORETURN;
 static void sigexit(int sig)
 {
@@ -1544,7 +1671,6 @@ static sighandler_t pick_sighandler(unsigned sig)
 }
 
 /* Restores tty foreground process group, and exits. */
-static void hush_exit(int exitcode) NORETURN;
 static void hush_exit(int exitcode)
 {
 #if ENABLE_FEATURE_EDITING_SAVE_ON_EXIT
@@ -1580,21 +1706,12 @@ static void hush_exit(int exitcode)
 	}
 #endif
 
-#if ENABLE_HUSH_JOB
 	fflush_all();
+#if ENABLE_HUSH_JOB
 	sigexit(- (exitcode & 0xff));
 #else
-	exit(exitcode);
+	_exit(exitcode);
 #endif
-}
-
-static void xfunc_has_died(void) NORETURN;
-static void xfunc_has_died(void)
-{
-	/* xfunc has failed! die die die */
-	/* no EXIT traps, this is an escape hatch! */
-	G.exiting = 1;
-	hush_exit(xfunc_error_retval);
 }
 
 
@@ -5913,7 +6030,8 @@ static FILE *generate_stream_from_string(const char *s, pid_t *pid_p)
 		) {
 			static const char *const argv[] = { NULL, NULL };
 			builtin_trap((char**)argv);
-			exit(0); /* not _exit() - we need to fflush */
+			fflush_all(); /* important */
+			_exit(0);
 		}
 # if BB_MMU
 		reset_traps_to_defaults();
@@ -5946,8 +6064,7 @@ static FILE *generate_stream_from_string(const char *s, pid_t *pid_p)
 	free(to_free);
 # endif
 	close(channel[1]);
-	close_on_exec_on(channel[0]);
-	return xfdopen_for_read(channel[0]);
+	return remember_FILE(xfdopen_for_read(channel[0]));
 }
 
 /* Return code is exit status of the process that is run. */
@@ -5976,7 +6093,7 @@ static int process_command_subs(o_string *dest, const char *s)
 	}
 
 	debug_printf("done reading from `cmd` pipe, closing it\n");
-	fclose(fp);
+	fclose_and_forget(fp);
 	/* We need to extract exitcode. Test case
 	 * "true; echo `sleep 1; false` $?"
 	 * should print 1 */
@@ -6068,6 +6185,74 @@ static void setup_heredoc(struct redir_struct *redir)
 	wait(NULL); /* wait till child has died */
 }
 
+/* fd: redirect wants this fd to be used (e.g. 3>file).
+ * Move all conflicting internally used fds,
+ * and remember them so that we can restore them later.
+ */
+static int save_fds_on_redirect(int fd, int squirrel[3])
+{
+	if (squirrel) {
+		/* Handle redirects of fds 0,1,2 */
+
+		/* If we collide with an already moved stdio fd... */
+		if (fd == squirrel[0]) {
+			squirrel[0] = xdup_and_close(squirrel[0], F_DUPFD);
+			return 1;
+		}
+		if (fd == squirrel[1]) {
+			squirrel[1] = xdup_and_close(squirrel[1], F_DUPFD);
+			return 1;
+		}
+		if (fd == squirrel[2]) {
+			squirrel[2] = xdup_and_close(squirrel[2], F_DUPFD);
+			return 1;
+		}
+		/* If we are about to redirect stdio fd, and did not yet move it... */
+		if (fd <= 2 && squirrel[fd] < 0) {
+			/* We avoid taking stdio fds */
+			squirrel[fd] = fcntl(fd, F_DUPFD, 10);
+			if (squirrel[fd] < 0 && errno != EBADF)
+				xfunc_die();
+			return 0; /* "we did not close fd" */
+		}
+	}
+
+#if ENABLE_HUSH_INTERACTIVE
+	if (fd != 0 && fd == G.interactive_fd) {
+		G.interactive_fd = xdup_and_close(G.interactive_fd, F_DUPFD_CLOEXEC);
+		return 1;
+	}
+#endif
+
+	/* Are we called from setup_redirects(squirrel==NULL)? Two cases:
+	 * (1) Redirect in a forked child. No need to save FILEs' fds,
+	 * we aren't going to use them anymore, ok to trash.
+	 * (2) "exec 3>FILE". Bummer. We can save FILEs' fds,
+	 * but how are we doing to use them?
+	 * "fileno(fd) = new_fd" can't be done.
+	 */
+	if (!squirrel)
+		return 0;
+
+	return save_FILEs_on_redirect(fd);
+}
+
+static void restore_redirects(int squirrel[3])
+{
+	int i, fd;
+	for (i = 0; i <= 2; i++) {
+		fd = squirrel[i];
+		if (fd != -1) {
+			/* We simply die on error */
+			xmove_fd(fd, i);
+		}
+	}
+
+	/* Moved G.interactive_fd stays on new fd, not doing anything for it */
+
+	restore_redirected_FILEs();
+}
+
 /* squirrel != NULL means we squirrel away copies of stdin, stdout,
  * and stderr if they are redirected. */
 static int setup_redirects(struct command *prog, int squirrel[])
@@ -6077,12 +6262,8 @@ static int setup_redirects(struct command *prog, int squirrel[])
 
 	for (redir = prog->redirects; redir; redir = redir->next) {
 		if (redir->rd_type == REDIRECT_HEREDOC2) {
-			/* rd_fd<<HERE case */
-			if (squirrel && redir->rd_fd < 3
-			 && squirrel[redir->rd_fd] < 0
-			) {
-				squirrel[redir->rd_fd] = dup(redir->rd_fd);
-			}
+			/* "rd_fd<<HERE" case */
+			save_fds_on_redirect(redir->rd_fd, squirrel);
 			/* for REDIRECT_HEREDOC2, rd_filename holds _contents_
 			 * of the heredoc */
 			debug_printf_parse("set heredoc '%s'\n",
@@ -6092,7 +6273,7 @@ static int setup_redirects(struct command *prog, int squirrel[])
 		}
 
 		if (redir->rd_dup == REDIRFD_TO_FILE) {
-			/* rd_fd<*>file case (<*> is <,>,>>,<>) */
+			/* "rd_fd<*>file" case (<*> is <,>,>>,<>) */
 			char *p;
 			if (redir->rd_filename == NULL) {
 				/* Something went wrong in the parse.
@@ -6105,45 +6286,37 @@ static int setup_redirects(struct command *prog, int squirrel[])
 			openfd = open_or_warn(p, mode);
 			free(p);
 			if (openfd < 0) {
-			/* this could get lost if stderr has been redirected, but
-			 * bash and ash both lose it as well (though zsh doesn't!) */
-//what the above comment tries to say?
+				/* Error message from open_or_warn can be lost
+				 * if stderr has been redirected, but bash
+				 * and ash both lose it as well
+				 * (though zsh doesn't!)
+				 */
 				return 1;
 			}
 		} else {
-			/* rd_fd<*>rd_dup or rd_fd<*>- cases */
+			/* "rd_fd<*>rd_dup" or "rd_fd<*>-" cases */
 			openfd = redir->rd_dup;
 		}
 
 		if (openfd != redir->rd_fd) {
-			if (squirrel && redir->rd_fd < 3
-			 && squirrel[redir->rd_fd] < 0
-			) {
-				squirrel[redir->rd_fd] = dup(redir->rd_fd);
-			}
+			int closed = save_fds_on_redirect(redir->rd_fd, squirrel);
 			if (openfd == REDIRFD_CLOSE) {
-				/* "n>-" means "close me" */
-				close(redir->rd_fd);
+				/* "rd_fd >&-" means "close me" */
+				if (!closed) {
+					/* ^^^ optimization: saving may already
+					 * have closed it. If not... */
+					close(redir->rd_fd);
+				}
 			} else {
 				xdup2(openfd, redir->rd_fd);
 				if (redir->rd_dup == REDIRFD_TO_FILE)
+					/* "rd_fd > FILE" */
 					close(openfd);
+				/* else: "rd_fd > rd_dup" */
 			}
 		}
 	}
 	return 0;
-}
-
-static void restore_redirects(int squirrel[])
-{
-	int i, fd;
-	for (i = 0; i < 3; i++) {
-		fd = squirrel[i];
-		if (fd != -1) {
-			/* We simply die on error */
-			xmove_fd(fd, i);
-		}
-	}
 }
 
 static char *find_in_path(const char *arg)
@@ -6466,7 +6639,8 @@ static void dump_cmd_in_x_mode(char **argv)
  * Never returns.
  * Don't exit() here.  If you don't exec, use _exit instead.
  * The at_exit handlers apparently confuse the calling process,
- * in particular stdin handling.  Not sure why? -- because of vfork! (vda) */
+ * in particular stdin handling. Not sure why? -- because of vfork! (vda)
+ */
 static void pseudo_exec_argv(nommu_save_t *nommu_save,
 		char **argv, int assignment_cnt,
 		char **argv_expanded) NORETURN;
@@ -6546,6 +6720,8 @@ static NOINLINE void pseudo_exec_argv(nommu_save_t *nommu_save,
 		if (a >= 0) {
 # if BB_MMU /* see above why on NOMMU it is not allowed */
 			if (APPLET_IS_NOEXEC(a)) {
+				/* Do not leak open fds from opened script files etc */
+				close_all_FILE_list();
 				debug_printf_exec("running applet '%s'\n", argv[0]);
 				run_applet_no_and_exit(a, argv);
 			}
@@ -7121,6 +7297,7 @@ static NOINLINE int run_pipe(struct pipe *pi)
 				if (x->b_function == builtin_exec && argv_expanded[1] == NULL) {
 					debug_printf("exec with redirects only\n");
 					rcode = setup_redirects(command, NULL);
+					/* rcode=1 can be if redir file can't be opened */
 					goto clean_up_and_ret1;
 				}
 			}
@@ -7247,9 +7424,20 @@ static NOINLINE int run_pipe(struct pipe *pi)
 			if (pipefds.rd > 1)
 				close(pipefds.rd);
 			/* Like bash, explicit redirects override pipes,
-			 * and the pipe fd is available for dup'ing. */
-			if (setup_redirects(command, NULL))
+			 * and the pipe fd (fd#1) is available for dup'ing:
+			 * "cmd1 2>&1 | cmd2": fd#1 is duped to fd#2, thus stderr
+			 * of cmd1 goes into pipe.
+			 */
+			if (setup_redirects(command, NULL)) {
+				/* Happens when redir file can't be opened:
+				 * $ hush -c 'echo FOO >&2 | echo BAR 3>/qwe/rty; echo BAZ'
+				 * FOO
+				 * hush: can't open '/qwe/rty': No such file or directory
+				 * BAZ
+				 * (echo BAR is not executed, it hits _exit(1) below)
+				 */
 				_exit(1);
+			}
 
 			/* Stores to nommu_save list of env vars putenv'ed
 			 * (NOMMU, on MMU we don't need that) */
@@ -7787,6 +7975,7 @@ int hush_main(int argc, char **argv)
 	INIT_G();
 	if (EXIT_SUCCESS != 0) /* if EXIT_SUCCESS == 0, it is already done */
 		G.last_exitcode = EXIT_SUCCESS;
+
 #if ENABLE_HUSH_FAST
 	G.count_SIGCHLD++; /* ensure it is != G.handled_SIGCHLD */
 #endif
@@ -7876,7 +8065,7 @@ int hush_main(int argc, char **argv)
 	/* Initialize some more globals to non-zero values */
 	cmdedit_update_prompt();
 
-	die_func = xfunc_has_died;
+	die_func = restore_ttypgrp_and__exit;
 
 	/* Shell is non-interactive at first. We need to call
 	 * install_special_sighandlers() if we are going to execute "sh <script>",
@@ -8035,10 +8224,10 @@ int hush_main(int argc, char **argv)
 		debug_printf("sourcing /etc/profile\n");
 		input = fopen_for_read("/etc/profile");
 		if (input != NULL) {
-			close_on_exec_on(fileno(input));
+			remember_FILE(input);
 			install_special_sighandlers();
 			parse_and_run_file(input);
-			fclose(input);
+			fclose_and_forget(input);
 		}
 		/* bash: after sourcing /etc/profile,
 		 * tries to source (in the given order):
@@ -8060,11 +8249,11 @@ int hush_main(int argc, char **argv)
 		G.global_argv++;
 		debug_printf("running script '%s'\n", G.global_argv[0]);
 		input = xfopen_for_read(G.global_argv[0]);
-		close_on_exec_on(fileno(input));
+		remember_FILE(input);
 		install_special_sighandlers();
 		parse_and_run_file(input);
 #if ENABLE_FEATURE_CLEAN_UP
-		fclose(input);
+		fclose_and_forget(input);
 #endif
 		goto final_return;
 	}
@@ -8932,7 +9121,7 @@ static int FAST_FUNC builtin_source(char **argv)
 		if (arg_path)
 			filename = arg_path;
 	}
-	input = fopen_or_warn(filename, "r");
+	input = remember_FILE(fopen_or_warn(filename, "r"));
 	free(arg_path);
 	if (!input) {
 		/* bb_perror_msg("%s", *argv); - done by fopen_or_warn */
@@ -8941,7 +9130,6 @@ static int FAST_FUNC builtin_source(char **argv)
 		 */
 		return EXIT_FAILURE;
 	}
-	close_on_exec_on(fileno(input));
 
 #if ENABLE_HUSH_FUNCTIONS
 	sv_flg = G.flag_return_in_progress;
@@ -8952,7 +9140,7 @@ static int FAST_FUNC builtin_source(char **argv)
 		save_and_replace_G_args(&sv, argv);
 
 	parse_and_run_file(input);
-	fclose(input);
+	fclose_and_forget(input);
 
 	if (argv[1])
 		restore_G_args(&sv, argv);
@@ -9153,9 +9341,11 @@ static int FAST_FUNC builtin_break(char **argv)
 	unsigned depth;
 	if (G.depth_of_loop == 0) {
 		bb_error_msg("%s: only meaningful in a loop", argv[0]);
+		/* if we came from builtin_continue(), need to undo "= 1" */
+		G.flag_break_continue = 0;
 		return EXIT_SUCCESS; /* bash compat */
 	}
-	G.flag_break_continue++; /* BC_BREAK = 1 */
+	G.flag_break_continue++; /* BC_BREAK = 1, or BC_CONTINUE = 2 */
 
 	G.depth_break_continue = depth = parse_numeric_argv1(argv, 1, 1);
 	if (depth == UINT_MAX)
