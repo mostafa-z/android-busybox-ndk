@@ -32,10 +32,17 @@
 struct kconf_id;
 /* maximum key range = 45, duplicates = 0 */
 
+#ifdef __GNUC__
+__inline
+#else
+#ifdef __cplusplus
+inline
+#endif
+#endif
 unsigned int
 kconf_id_hash (register const char *str, register unsigned int len)
 {
-  static unsigned char asso_values[] =
+  unsigned char asso_values[] =
     {
       47, 47, 47, 47, 47, 47, 47, 47, 47, 47,
       47, 47, 47, 47, 47, 47, 47, 47, 47, 47,
@@ -112,7 +119,7 @@ struct kconf_id_strings_t
     char kconf_id_strings_str41[sizeof("choice")];
     char kconf_id_strings_str46[sizeof("prompt")];
   };
-struct kconf_id_strings_t kconf_id_strings_contents =
+static struct kconf_id_strings_t kconf_id_strings_contents =
   {
     "if",
     "int",
@@ -146,7 +153,10 @@ struct kconf_id_strings_t kconf_id_strings_contents =
     "prompt"
   };
 #define kconf_id_strings ((const char *) &kconf_id_strings_contents)
-struct kconf_id *
+#ifdef __GNUC__
+__inline
+#endif
+static struct kconf_id *
 kconf_id_lookup (register const char *str, register unsigned int len)
 {
   enum

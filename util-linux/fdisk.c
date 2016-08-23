@@ -638,6 +638,43 @@ typedef struct sun_partition sun_partition;
 #define sunlabel ((sun_partition *)MBRbuffer)
 STATIC_OSF void bsd_select(void);
 STATIC_OSF void xbsd_print_disklabel(int);
+
+/* Return partition name */
+static const char *
+partname(const char *dev, int pno, int lth)
+{
+        const char *p;
+        int w, wp;
+        int bufsiz;
+        char *bufp;
+
+        bufp = auto_string(xzalloc(80));
+        bufsiz = 80;
+
+        w = strlen(dev);
+        p = "";
+
+        if (isdigit(dev[w-1]))
+                p = "p";
+
+        /* devfs kludge - note: fdisk partition names are not supposed
+           to equal kernel names, so there is no reason to do this */
+        if (strcmp(dev + w - 4, "disc") == 0) {
+                w -= 4;
+                p = "part";
+        }
+
+        wp = strlen(p);
+
+        if (lth) {
+                snprintf(bufp, bufsiz, "%*.*s%s%-2u",
+                        lth-wp-2, w, dev, p, pno);
+        } else {
+                snprintf(bufp, bufsiz, "%.*s%s%-2u", w, dev, p, pno);
+        }
+        return bufp;
+}
+
 #include "fdisk_osf.c"
 
 STATIC_GPT void gpt_list_table(int xtra);
@@ -2056,42 +2093,6 @@ fix_partition_table_order(void)
 	puts("Done");
 }
 #endif
-
-/* Return partition name */
-static const char *
-partname(const char *dev, int pno, int lth)
-{
-	const char *p;
-	int w, wp;
-	int bufsiz;
-	char *bufp;
-
-	bufp = auto_string(xzalloc(80));
-	bufsiz = 80;
-
-	w = strlen(dev);
-	p = "";
-
-	if (isdigit(dev[w-1]))
-		p = "p";
-
-	/* devfs kludge - note: fdisk partition names are not supposed
-	   to equal kernel names, so there is no reason to do this */
-	if (strcmp(dev + w - 4, "disc") == 0) {
-		w -= 4;
-		p = "part";
-	}
-
-	wp = strlen(p);
-
-	if (lth) {
-		snprintf(bufp, bufsiz, "%*.*s%s%-2u",
-			lth-wp-2, w, dev, p, pno);
-	} else {
-		snprintf(bufp, bufsiz, "%.*s%s%-2u", w, dev, p, pno);
-	}
-	return bufp;
-}
 
 static const char *
 chs_string11(unsigned cyl, unsigned head, unsigned sect)
