@@ -8408,6 +8408,8 @@ evaltree(union node *n, int flags)
 		evalfn = evalloop;
 		goto calleval;
 	case NSUBSHELL:
+		evalfn = evalsubshell;
+		goto checkexit;
 	case NBACKGND:
 		evalfn = evalsubshell;
 		goto calleval;
@@ -11227,6 +11229,9 @@ readtoken1(int c, int syntax, char *eofmark, int striptabs)
 				c = decode_dollar_squote();
 				if (c & 0x100) {
 					USTPUTC('\\', out);
+					if (eofmark == NULL || dblquote)
+						/* Or else this SEGVs: $'\<0x82>' */
+						USTPUTC(CTLESC, out);
 					c = (unsigned char)c;
 				}
 			}
@@ -11659,9 +11664,18 @@ parsebackq: {
 	str = NULL;
 	savelen = out - (char *)stackblock();
 	if (savelen > 0) {
+		/*
+		 * FIXME: this can allocate very large block on stack and SEGV.
+		 * Example:
+		 * echo "..<100kbytes>..`true` $(true) `true` ..."
+		 * allocates 100kb for every command subst. With about
+		 * a hundred command substitutions stack overflows.
+		 * With larger prepended string, SEGV happens sooner.
+		 */
 		str = alloca(savelen);
 		memcpy(str, stackblock(), savelen);
 	}
+
 	if (oldstyle) {
 		/* We must read until the closing backquote, giving special
 		 * treatment to some slashes, and then push the string and
