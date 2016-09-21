@@ -169,6 +169,7 @@ enum { pattern_valid = 0 };
 struct globals {
 	int cur_fline; /* signed */
 	int kbd_fd;  /* fd to get input from */
+	int kbd_fd_orig_flags;
 	int less_gets_pos;
 /* last position in last line, taking into account tabs */
 	size_t last_line_pos;
@@ -304,6 +305,8 @@ static void print_statusline(const char *str)
 static void less_exit(int code)
 {
 	set_tty_cooked();
+	if (!(G.kbd_fd_orig_flags & O_NONBLOCK))
+		ndelay_off(kbd_fd);
 	clear_line();
 	if (code < 0)
 		kill_myself_with_sig(- code); /* does not return */
@@ -1797,9 +1800,10 @@ int less_main(int argc, char **argv)
 	/* Some versions of less can survive w/o controlling tty,
 	 * try to do the same. This also allows to specify an alternative
 	 * tty via "less 1<>TTY".
-	 * We don't try to use STDOUT_FILENO directly,
+	 *
+	 * We prefer not to use STDOUT_FILENO directly,
 	 * since we want to set this fd to non-blocking mode,
-	 * and not bother with restoring it on exit.
+	 * and not interfere with other processes which share stdout with us.
 	 */
 	tty_name = xmalloc_ttyname(STDOUT_FILENO);
 	if (tty_name) {
@@ -1811,10 +1815,12 @@ int less_main(int argc, char **argv)
 		/* Try controlling tty */
  try_ctty:
 		tty_fd = open(CURRENT_TTY, O_RDONLY);
-		if (tty_fd < 0)
-			return bb_cat(argv);
+		if (tty_fd < 0) {
+			/* If all else fails, less 481 uses stdout. Mimic that */
+			tty_fd = STDOUT_FILENO;
+		}
 	}
-	ndelay_on(tty_fd);
+	G.kbd_fd_orig_flags = ndelay_on(tty_fd);
 	kbd_fd = tty_fd; /* save in a global */
 
 	tcgetattr(kbd_fd, &term_orig);
