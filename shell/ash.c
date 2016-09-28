@@ -39,6 +39,7 @@
 
 #include <setjmp.h>
 #include <fnmatch.h>
+#include <glob.h>
 #include <sys/times.h>
 #include <sys/utsname.h> /* for setting $HOSTNAME */
 
@@ -2808,18 +2809,27 @@ enum {
 static int
 SIT(int c, int syntax)
 {
-	static const char spec_symbls[] ALIGN1 = "\t\n !\"$&'()*-/:;<=>?[\\]`|}~";
+	/* Used to also have '/' in this string: "\t\n !\"$&'()*-/:;<=>?[\\]`|}~" */
+	static const char spec_symbls[] ALIGN1 = "\t\n !\"$&'()*-:;<=>?[\\]`|}~";
+	/*
+	 * This causes '/' to be prepended with CTLESC in dquoted string,
+	 * making "./file"* treated incorrectly because we feed
+	 * ".\/file*" string to glob(), confusing it (see expandmeta func).
+	 * The "homegrown" glob implementation is okay with that,
+	 * but glibc one isn't. With '/' always treated as CWORD,
+	 * both work fine.
+	 */
 # if ENABLE_ASH_ALIAS
 	static const uint8_t syntax_index_table[] ALIGN1 = {
 		1, 2, 1, 3, 4, 5, 1, 6,         /* "\t\n !\"$&'" */
-		7, 8, 3, 3, 3, 3, 1, 1,         /* "()*-/:;<" */
+		7, 8, 3, 3,/*3,*/3, 1, 1,       /* "()*-/:;<" */
 		3, 1, 3, 3, 9, 3, 10, 1,        /* "=>?[\\]`|" */
 		11, 3                           /* "}~" */
 	};
 # else
 	static const uint8_t syntax_index_table[] ALIGN1 = {
 		0, 1, 0, 2, 3, 4, 0, 5,         /* "\t\n !\"$&'" */
-		6, 7, 2, 2, 2, 2, 0, 0,         /* "()*-/:;<" */
+		6, 7, 2, 2,/*2,*/2, 0, 0,       /* "()*-/:;<" */
 		2, 0, 2, 2, 8, 2, 9, 0,         /* "=>?[\\]`|" */
 		10, 2                           /* "}~" */
 	};
@@ -2901,7 +2911,8 @@ static const uint8_t syntax_index_table[] ALIGN1 = {
 	/*  44  "," */ CWORD_CWORD_CWORD_CWORD,
 	/*  45  "-" */ CWORD_CCTL_CCTL_CWORD,
 	/*  46  "." */ CWORD_CWORD_CWORD_CWORD,
-	/*  47  "/" */ CWORD_CCTL_CCTL_CWORD,
+/* "/" was CWORD_CCTL_CCTL_CWORD, see comment in SIT() function why this is changed: */
+	/*  47  "/" */ CWORD_CWORD_CWORD_CWORD,
 	/*  48  "0" */ CWORD_CWORD_CWORD_CWORD,
 	/*  49  "1" */ CWORD_CWORD_CWORD_CWORD,
 	/*  50  "2" */ CWORD_CWORD_CWORD_CWORD,
@@ -5101,8 +5112,26 @@ openredirect(union node *redir)
 	char *fname;
 	int f;
 
-	fname = redir->nfile.expfname;
 	switch (redir->nfile.type) {
+/* Can't happen, our single caller does this itself */
+//	case NTOFD:
+//	case NFROMFD:
+//		return -1;
+	case NHERE:
+	case NXHERE:
+		return openhere(redir);
+	}
+
+	/* For N[X]HERE, reading redir->nfile.expfname would touch beyond
+	 * allocated space. Do it only when we know it is safe.
+	 */
+	fname = redir->nfile.expfname;
+
+	switch (redir->nfile.type) {
+	default:
+#if DEBUG
+		abort();
+#endif
 	case NFROM:
 		f = open(fname, O_RDONLY);
 		if (f < 0)
@@ -5134,20 +5163,6 @@ openredirect(union node *redir)
 		f = open(fname, O_WRONLY|O_CREAT|O_APPEND, 0666);
 		if (f < 0)
 			goto ecreate;
-		break;
-	default:
-#if DEBUG
-		abort();
-#endif
-		/* Fall through to eliminate warning. */
-/* Our single caller does this itself */
-//	case NTOFD:
-//	case NFROMFD:
-//		f = -1;
-//		break;
-	case NHERE:
-	case NXHERE:
-		f = openhere(redir);
 		break;
 	}
 
@@ -5633,7 +5648,6 @@ rmescapes(char *str, int flag)
 	while (*p) {
 		if ((unsigned char)*p == CTLQUOTEMARK) {
 // Note: both inquotes and protect_against_glob only affect whether
-// CTLESC,<ch> gets converted to <ch> or to \<ch>
 			inquotes = ~inquotes;
 			p++;
 			protect_against_glob = globbing;
@@ -5641,6 +5655,10 @@ rmescapes(char *str, int flag)
 		}
 		if ((unsigned char)*p == CTLESC) {
 			p++;
+#if DEBUG
+			if (*p == '\0')
+				ash_msg_and_raise_error("CTLESC at EOL (shouldn't happen)");
+#endif
 			if (protect_against_glob) {
 				*q++ = '\\';
 			}
@@ -5697,11 +5715,14 @@ memtodest(const char *p, size_t len, int syntax, int quotes)
 		unsigned char c = *p++;
 		if (c) {
 			int n = SIT(c, syntax);
-			if ((quotes & QUOTES_ESC) &&
-					((n == CCTL) ||
-					(((quotes & EXP_FULL) || syntax != BASESYNTAX) &&
-					n == CBACK)))
+			if ((quotes & QUOTES_ESC)
+			 && ((n == CCTL)
+			    ||  (((quotes & EXP_FULL) || syntax != BASESYNTAX)
+				&& n == CBACK)
+				)
+			) {
 				USTPUTC(CTLESC, q);
+			}
 		} else if (!(quotes & QUOTES_KEEPNUL))
 			continue;
 		USTPUTC(c, q);
@@ -6435,7 +6456,8 @@ subevalvar(char *p, char *varname, int strloc, int subtype,
 		char *idx, *end;
 
 		if (!repl) {
-			if ((repl=strchr(str, CTLESC)))
+			repl = strchr(str, CTLESC);
+			if (repl)
 				*repl++ = '\0';
 			else
 				repl = nullstr;
@@ -6976,6 +6998,70 @@ addfname(const char *name)
 	exparg.lastp = &sp->next;
 }
 
+/* If we want to use glob() from libc... */
+#if 1
+
+/* Add the result of glob() to the list */
+static void
+addglob(const glob_t *pglob)
+{
+	char **p = pglob->gl_pathv;
+
+	do {
+		addfname(*p);
+	} while (*++p);
+}
+static void
+expandmeta(struct strlist *str /*, int flag*/)
+{
+	/* TODO - EXP_REDIR */
+
+	while (str) {
+		char *p;
+		glob_t pglob;
+		int i;
+
+		if (fflag)
+			goto nometa;
+		INT_OFF;
+		p = preglob(str->text, RMESCAPE_ALLOC | RMESCAPE_HEAP);
+		/*
+		 * GLOB_NOMAGIC (GNU): if no *?[ chars in pattern, return it even if no match
+		 * TODO?: GLOB_NOCHECK: if no match, return unchanged pattern (sans \* escapes?)
+		 */
+		i = glob(p, GLOB_NOMAGIC, NULL, &pglob);
+		if (p != str->text)
+			free(p);
+		switch (i) {
+		case 0:
+			/* GLOB_MAGCHAR is set if *?[ chars were seen (GNU) */
+			if (!(pglob.gl_flags & GLOB_MAGCHAR))
+				goto nometa2;
+			addglob(&pglob);
+			globfree(&pglob);
+			INT_ON;
+			break;
+		case GLOB_NOMATCH:
+nometa2:
+			globfree(&pglob);
+			INT_ON;
+nometa:
+			*exparg.lastp = str;
+			rmescapes(str->text, 0);
+			exparg.lastp = &str->next;
+			break;
+		default:	/* GLOB_NOSPACE */
+			globfree(&pglob);
+			INT_ON;
+			ash_msg_and_raise_error(bb_msg_memory_exhausted);
+		}
+		str = str->next;
+	}
+}
+
+#else
+/* Homegrown globbing code. (dash also has both, uses homegrown one.) */
+
 /*
  * Do metacharacter (i.e. *, ?, [...]) expansion.
  */
@@ -7179,7 +7265,8 @@ expandmeta(struct strlist *str /*, int flag*/)
 		p = preglob(str->text, RMESCAPE_ALLOC | RMESCAPE_HEAP);
 		{
 			int i = strlen(str->text);
-			expdir = ckmalloc(i < 2048 ? 2048 : i); /* XXX */
+//BUGGY estimation of how long expanded name can be
+			expdir = ckmalloc(i < 2048 ? 2048 : i+1);
 		}
 		expmeta(expdir, expdir, p);
 		free(expdir);
@@ -7204,6 +7291,7 @@ expandmeta(struct strlist *str /*, int flag*/)
 		str = str->next;
 	}
 }
+#endif /* our globbing code */
 
 /*
  * Perform variable substitution and command substitution on an argument,
@@ -11222,20 +11310,24 @@ readtoken1(int c, int syntax, char *eofmark, int striptabs)
 			USTPUTC(c, out);
 			break;
 		case CCTL:
-			if (eofmark == NULL || dblquote)
-				USTPUTC(CTLESC, out);
 #if ENABLE_ASH_BASH_COMPAT
 			if (c == '\\' && bash_dollar_squote) {
 				c = decode_dollar_squote();
+				if (c == '\0') {
+					/* skip $'\000', $'\x00' (like bash) */
+					break;
+				}
 				if (c & 0x100) {
-					USTPUTC('\\', out);
-					if (eofmark == NULL || dblquote)
-						/* Or else this SEGVs: $'\<0x82>' */
-						USTPUTC(CTLESC, out);
+					/* Unknown escape. Encode as '\z' */
 					c = (unsigned char)c;
+					if (eofmark == NULL || dblquote)
+						USTPUTC(CTLESC, out);
+					USTPUTC('\\', out);
 				}
 			}
 #endif
+			if (eofmark == NULL || dblquote)
+				USTPUTC(CTLESC, out);
 			USTPUTC(c, out);
 			break;
 		case CBACK:     /* backslash */
