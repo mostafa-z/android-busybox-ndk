@@ -32,6 +32,7 @@
 #define DEBUG_TIME 0
 #define DEBUG_PID 1
 #define DEBUG_SIG 1
+#define DEBUG_INTONOFF 0
 
 #define PROFILE 0
 
@@ -442,10 +443,18 @@ static void exitshell(void) NORETURN;
  * much more efficient and portable.  (But hacking the kernel is so much
  * more fun than worrying about efficiency and portability. :-))
  */
-#define INT_OFF do { \
+#if DEBUG_INTONOFF
+# define INT_OFF do { \
+	TRACE(("%s:%d INT_OFF(%d)\n", __func__, __LINE__, suppress_int)); \
 	suppress_int++; \
 	barrier(); \
 } while (0)
+#else
+# define INT_OFF do { \
+	suppress_int++; \
+	barrier(); \
+} while (0)
+#endif
 
 /*
  * Called to raise an exception.  Since C doesn't include exceptions, we
@@ -513,7 +522,14 @@ int_on(void)
 		raise_interrupt();
 	}
 }
-#define INT_ON int_on()
+#if DEBUG_INTONOFF
+# define INT_ON do { \
+	TRACE(("%s:%d INT_ON(%d)\n", __func__, __LINE__, suppress_int-1)); \
+	int_on(); \
+} while (0)
+#else
+# define INT_ON int_on()
+#endif
 static IF_ASH_OPTIMIZE_FOR_SIZE(inline) void
 force_int_on(void)
 {
@@ -844,13 +860,8 @@ trace_vprintf(const char *fmt, va_list va)
 {
 	if (debug != 1)
 		return;
-	if (DEBUG_TIME)
-		fprintf(tracefile, "%u ", (int) time(NULL));
-	if (DEBUG_PID)
-		fprintf(tracefile, "[%u] ", (int) getpid());
-	if (DEBUG_SIG)
-		fprintf(tracefile, "pending s:%d i:%d(supp:%d) ", pending_sig, pending_int, suppress_int);
 	vfprintf(tracefile, fmt, va);
+	fprintf(tracefile, "\n");
 }
 
 static void
@@ -1243,11 +1254,10 @@ ash_vmsg_and_raise(int cond, const char *msg, va_list ap)
 {
 #if DEBUG
 	if (msg) {
-		TRACE(("ash_vmsg_and_raise(%d, \"", cond));
+		TRACE(("ash_vmsg_and_raise(%d):", cond));
 		TRACEV((msg, ap));
-		TRACE(("\") pid=%d\n", getpid()));
 	} else
-		TRACE(("ash_vmsg_and_raise(%d, NULL) pid=%d\n", cond, getpid()));
+		TRACE(("ash_vmsg_and_raise(%d):NULL\n", cond));
 	if (msg)
 #endif
 		ash_vmsg(msg, ap);
@@ -3939,6 +3949,8 @@ wait_block_or_sig(int *status)
 	int pid;
 
 	do {
+		sigset_t mask;
+
 		/* Poll all children for changes in their state */
 		got_sigchld = 0;
 		/* if job control is active, accept stopped processes too */
@@ -3947,14 +3959,13 @@ wait_block_or_sig(int *status)
 			break; /* Error (e.g. EINTR, ECHILD) or pid */
 
 		/* Children exist, but none are ready. Sleep until interesting signal */
-#if 0 /* dash does this */
-		sigset_t mask;
+#if 1
 		sigfillset(&mask);
 		sigprocmask(SIG_SETMASK, &mask, &mask);
 		while (!got_sigchld && !pending_sig)
 			sigsuspend(&mask);
 		sigprocmask(SIG_SETMASK, &mask, NULL);
-#else
+#else /* unsafe: a signal can set pending_sig after check, but before pause() */
 		while (!got_sigchld && !pending_sig)
 			pause();
 #endif
@@ -3993,9 +4004,9 @@ dowait(int block, struct job *job)
 	 * either enter a sleeping waitpid() (BUG), or need to busy-loop.
 	 *
 	 * Because of this, we run inside INT_OFF, but use a special routine
-	 * which combines waitpid() and pause().
+	 * which combines waitpid() and sigsuspend().
 	 * This is the reason why we need to have a handler for SIGCHLD:
-	 * SIG_DFL handler does not wake pause().
+	 * SIG_DFL handler does not wake sigsuspend().
 	 */
 	INT_OFF;
 	if (block == DOWAIT_BLOCK_OR_SIG) {
@@ -7053,6 +7064,21 @@ expandmeta(struct strlist *str /*, int flag*/)
 
 		if (fflag)
 			goto nometa;
+
+		/* Avoid glob() (and thus, stat() et al) for words like "echo" */
+		p = str->text;
+		while (*p) {
+			if (*p == '*')
+				goto need_glob;
+			if (*p == '?')
+				goto need_glob;
+			if (*p == '[')
+				goto need_glob;
+			p++;
+		}
+		goto nometa;
+
+ need_glob:
 		INT_OFF;
 		p = preglob(str->text, RMESCAPE_ALLOC | RMESCAPE_HEAP);
 // GLOB_NOMAGIC (GNU): if no *?[ chars in pattern, return it even if no match
@@ -9091,7 +9117,7 @@ mklocal(char *name)
 			/* else:
 			 * it's a duplicate "local VAR" declaration, do nothing
 			 */
-			return;
+			goto ret;
 		}
 		lvp = lvp->next;
 	}
@@ -9130,6 +9156,7 @@ mklocal(char *name)
 	lvp->vp = vp;
 	lvp->next = localvars;
 	localvars = lvp;
+ ret:
 	INT_ON;
 }
 
@@ -10124,6 +10151,9 @@ static void
 popfile(void)
 {
 	struct parsefile *pf = g_parsefile;
+
+	if (pf == &basepf)
+		return;
 
 	INT_OFF;
 	if (pf->pf_fd >= 0)
@@ -12286,7 +12316,7 @@ expandstr(const char *ps)
 static int
 evalstring(char *s, int flags)
 {
-	struct jmploc *volatile savehandler = exception_handler;
+	struct jmploc *volatile savehandler;
 	struct jmploc jmploc;
 	int ex;
 
@@ -12307,10 +12337,10 @@ evalstring(char *s, int flags)
 	 * But if we skip popfile(), we hit EOF in eval's string, and exit.
 	 */
 	savehandler = exception_handler;
-	exception_handler = &jmploc;
 	ex = setjmp(jmploc.loc);
 	if (ex)
 		goto out;
+	exception_handler = &jmploc;
 
 	while ((n = parsecmd(0)) != NODE_EOF) {
 		int i;
@@ -13419,16 +13449,15 @@ int ash_main(int argc UNUSED_PARAM, char **argv)
 		goto state4;
 	}
 	exception_handler = &jmploc;
-#if DEBUG
-	opentrace();
-	TRACE(("Shell args: "));
-	trace_puts_args(argv);
-#endif
 	rootpid = getpid();
 
 	init();
 	setstackmark(&smark);
 	procargs(argv);
+#if DEBUG
+	TRACE(("Shell args: "));
+	trace_puts_args(argv);
+#endif
 
 	if (argv[0] && argv[0][0] == '-')
 		isloginsh = 1;
