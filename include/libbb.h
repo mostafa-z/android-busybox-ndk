@@ -45,7 +45,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#ifndef major
+#if !defined(major) || defined(__GLIBC__)
 # include <sys/sysmacros.h>
 #endif
 #include <sys/wait.h>
@@ -923,6 +923,7 @@ extern const struct suffix_mult bkm_suffixes[];
 #define km_suffixes (bkm_suffixes + 1)
 extern const struct suffix_mult cwbkMG_suffixes[];
 #define kMG_suffixes (cwbkMG_suffixes + 3)
+extern const struct suffix_mult kmg_i_suffixes[];
 
 #include "xatonum.h"
 /* Specialized: */
