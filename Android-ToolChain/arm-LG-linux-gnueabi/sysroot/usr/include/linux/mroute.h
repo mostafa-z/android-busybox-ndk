@@ -4,15 +4,13 @@
 #include <linux/sockios.h>
 #include <linux/types.h>
 
-/*
- *	Based on the MROUTING 3.5 defines primarily to keep
- *	source compatibility with BSD.
+/* Based on the MROUTING 3.5 defines primarily to keep
+ * source compatibility with BSD.
  *
- *	See the mrouted code for the original history.
+ * See the mrouted code for the original history.
  *
- *      Protocol Independent Multicast (PIM) data structures included
- *      Carlos Picoto (cap@di.fc.ul.pt)
- *
+ * Protocol Independent Multicast (PIM) data structures included
+ * Carlos Picoto (cap@di.fc.ul.pt)
  */
 
 #define MRT_BASE	200
@@ -26,20 +24,21 @@
 #define MRT_ASSERT	(MRT_BASE+7)	/* Activate PIM assert mode		*/
 #define MRT_PIM		(MRT_BASE+8)	/* enable PIM code			*/
 #define MRT_TABLE	(MRT_BASE+9)	/* Specify mroute table ID		*/
+#define MRT_ADD_MFC_PROXY	(MRT_BASE+10)	/* Add a (*,*|G) mfc entry	*/
+#define MRT_DEL_MFC_PROXY	(MRT_BASE+11)	/* Del a (*,*|G) mfc entry	*/
+#define MRT_MAX		(MRT_BASE+11)
 
 #define SIOCGETVIFCNT	SIOCPROTOPRIVATE	/* IP protocol privates */
 #define SIOCGETSGCNT	(SIOCPROTOPRIVATE+1)
 #define SIOCGETRPF	(SIOCPROTOPRIVATE+2)
 
-#define MAXVIFS		32	
+#define MAXVIFS		32
 typedef unsigned long vifbitmap_t;	/* User mode code depends on this lot */
 typedef unsigned short vifi_t;
 #define ALL_VIFS	((vifi_t)(-1))
 
-/*
- *	Same idea as select
- */
- 
+/* Same idea as select */
+
 #define VIFM_SET(n,m)	((m)|=(1<<(n)))
 #define VIFM_CLR(n,m)	((m)&=~(1<<(n)))
 #define VIFM_ISSET(n,m)	((m)&(1<<(n)))
@@ -47,11 +46,9 @@ typedef unsigned short vifi_t;
 #define VIFM_COPY(mfrom,mto)	((mto)=(mfrom))
 #define VIFM_SAME(m1,m2)	((m1)==(m2))
 
-/*
- *	Passed by mrouted for an MRT_ADD_VIF - again we use the
- *	mrouted 3.6 structures for compatibility
+/* Passed by mrouted for an MRT_ADD_VIF - again we use the
+ * mrouted 3.6 structures for compatibility
  */
- 
 struct vifctl {
 	vifi_t	vifc_vifi;		/* Index of VIF */
 	unsigned char vifc_flags;	/* VIFF_ flags */
@@ -70,10 +67,7 @@ struct vifctl {
 #define VIFF_USE_IFINDEX	0x8	/* use vifc_lcl_ifindex instead of
 					   vifc_lcl_addr to find an interface */
 
-/*
- *	Cache manipulation structures for mrouted and PIMd
- */
- 
+/* Cache manipulation structures for mrouted and PIMd */
 struct mfcctl {
 	struct in_addr mfcc_origin;		/* Origin of mcast	*/
 	struct in_addr mfcc_mcastgrp;		/* Group in question	*/
@@ -85,10 +79,7 @@ struct mfcctl {
 	int	     mfcc_expire;
 };
 
-/* 
- *	Group count retrieval for mrouted
- */
- 
+/*  Group count retrieval for mrouted */
 struct sioc_sg_req {
 	struct in_addr src;
 	struct in_addr grp;
@@ -97,10 +88,7 @@ struct sioc_sg_req {
 	unsigned long wrong_if;
 };
 
-/*
- *	To get vif packet counts
- */
-
+/* To get vif packet counts */
 struct sioc_vif_req {
 	vifi_t	vifi;		/* Which iface */
 	unsigned long icount;	/* In packets */
@@ -109,11 +97,9 @@ struct sioc_vif_req {
 	unsigned long obytes;	/* Out bytes */
 };
 
-/*
- *	This is the format the mroute daemon expects to see IGMP control
- *	data. Magically happens to be like an IP packet as per the original
+/* This is the format the mroute daemon expects to see IGMP control
+ * data. Magically happens to be like an IP packet as per the original
  */
- 
 struct igmpmsg {
 	__u32 unused1,unused2;
 	unsigned char im_msgtype;		/* What is this */
@@ -123,21 +109,13 @@ struct igmpmsg {
 	struct in_addr im_src,im_dst;
 };
 
-/*
- *	That's all usermode folks
- */
-
-
+/* That's all usermode folks */
 
 #define MFC_ASSERT_THRESH (3*HZ)		/* Maximal freq. of asserts */
 
-/*
- *	Pseudo messages used by mrouted
- */
-
+/* Pseudo messages used by mrouted */
 #define IGMPMSG_NOCACHE		1		/* Kern cache fill request to mrouted */
 #define IGMPMSG_WRONGVIF	2		/* For PIM assert processing (unused) */
 #define IGMPMSG_WHOLEPKT	3		/* For PIM Register processing */
 
-
-#endif
+#endif /* __LINUX_MROUTE_H */

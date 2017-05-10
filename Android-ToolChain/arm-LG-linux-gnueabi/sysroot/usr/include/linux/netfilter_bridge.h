@@ -4,6 +4,7 @@
 /* bridge-specific defines for netfilter. 
  */
 
+#include <linux/in.h>
 #include <linux/netfilter.h>
 #include <linux/if_ether.h>
 #include <linux/if_vlan.h>
@@ -24,4 +25,4 @@
 #define NF_BR_BROUTING		5
 #define NF_BR_NUMHOOKS		6
 
-#endif
+#endif /* __LINUX_BRIDGE_NETFILTER_H */

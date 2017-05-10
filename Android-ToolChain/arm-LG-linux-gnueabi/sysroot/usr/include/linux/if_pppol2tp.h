@@ -16,10 +16,12 @@
 #define __LINUX_IF_PPPOL2TP_H
 
 #include <linux/types.h>
-
+#include <linux/in.h>
+#include <linux/in6.h>
+#include <linux/l2tp.h>
 
 /* Structure used to connect() the socket to a particular tunnel UDP
- * socket.
+ * socket over IPv4.
  */
 struct pppol2tp_addr {
 	__kernel_pid_t	pid;		/* pid that owns the fd.
@@ -30,6 +32,20 @@ struct pppol2tp_addr {
 
 	__u16 s_tunnel, s_session;	/* For matching incoming packets */
 	__u16 d_tunnel, d_session;	/* For sending outgoing packets */
+};
+
+/* Structure used to connect() the socket to a particular tunnel UDP
+ * socket over IPv6.
+ */
+struct pppol2tpin6_addr {
+	__kernel_pid_t	pid;		/* pid that owns the fd.
+					 * 0 => current */
+	int	fd;			/* FD of UDP socket to use */
+
+	__u16 s_tunnel, s_session;	/* For matching incoming packets */
+	__u16 d_tunnel, d_session;	/* For sending outgoing packets */
+
+	struct sockaddr_in6 addr;	/* IP address and port to send to */
 };
 
 /* The L2TPv3 protocol changes tunnel and session ids from 16 to 32
@@ -44,6 +60,17 @@ struct pppol2tpv3_addr {
 
 	__u32 s_tunnel, s_session;	/* For matching incoming packets */
 	__u32 d_tunnel, d_session;	/* For sending outgoing packets */
+};
+
+struct pppol2tpv3in6_addr {
+	__kernel_pid_t	pid;		/* pid that owns the fd.
+					 * 0 => current */
+	int	fd;			/* FD of UDP or IP socket to use */
+
+	__u32 s_tunnel, s_session;	/* For matching incoming packets */
+	__u32 d_tunnel, d_session;	/* For sending outgoing packets */
+
+	struct sockaddr_in6 addr;	/* IP address and port to send to */
 };
 
 /* Socket options:
@@ -64,16 +91,14 @@ enum {
 	PPPOL2TP_SO_REORDERTO	= 5,
 };
 
-/* Debug message categories for the DEBUG socket option */
+/* Debug message categories for the DEBUG socket option (deprecated) */
 enum {
-	PPPOL2TP_MSG_DEBUG	= (1 << 0),	/* verbose debug (if
-						 * compiled in) */
-	PPPOL2TP_MSG_CONTROL	= (1 << 1),	/* userspace - kernel
-						 * interface */
-	PPPOL2TP_MSG_SEQ	= (1 << 2),	/* sequence numbers */
-	PPPOL2TP_MSG_DATA	= (1 << 3),	/* data packets */
+	PPPOL2TP_MSG_DEBUG	= L2TP_MSG_DEBUG,
+	PPPOL2TP_MSG_CONTROL	= L2TP_MSG_CONTROL,
+	PPPOL2TP_MSG_SEQ	= L2TP_MSG_SEQ,
+	PPPOL2TP_MSG_DATA	= L2TP_MSG_DATA,
 };
 
 
 
-#endif
+#endif /* __LINUX_IF_PPPOL2TP_H */

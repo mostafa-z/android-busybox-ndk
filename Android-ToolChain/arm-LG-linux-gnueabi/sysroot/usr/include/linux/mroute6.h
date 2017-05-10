@@ -1,6 +1,7 @@
 #ifndef __LINUX_MROUTE6_H
 #define __LINUX_MROUTE6_H
 
+#include <linux/kernel.h>
 #include <linux/types.h>
 #include <linux/sockios.h>
 
@@ -26,6 +27,9 @@
 #define MRT6_ASSERT	(MRT6_BASE+7)	/* Activate PIM assert mode		*/
 #define MRT6_PIM	(MRT6_BASE+8)	/* enable PIM code			*/
 #define MRT6_TABLE	(MRT6_BASE+9)	/* Specify mroute table ID		*/
+#define MRT6_ADD_MFC_PROXY	(MRT6_BASE+10)	/* Add a (*,*|G) mfc entry	*/
+#define MRT6_DEL_MFC_PROXY	(MRT6_BASE+11)	/* Del a (*,*|G) mfc entry	*/
+#define MRT6_MAX	(MRT6_BASE+11)
 
 #define SIOCGETMIFCNT_IN6	SIOCPROTOPRIVATE	/* IP protocol privates */
 #define SIOCGETSGCNT_IN6	(SIOCPROTOPRIVATE+1)
@@ -43,12 +47,8 @@ typedef unsigned short mifi_t;
 typedef	__u32		if_mask;
 #define NIFBITS (sizeof(if_mask) * 8)        /* bits per mask */
 
-#if !defined(DIV_ROUND_UP)
-#define	DIV_ROUND_UP(x,y)	(((x) + ((y) - 1)) / (y))
-#endif
-
 typedef struct if_set {
-	if_mask ifs_bits[DIV_ROUND_UP(IF_SETSIZE, NIFBITS)];
+	if_mask ifs_bits[__KERNEL_DIV_ROUND_UP(IF_SETSIZE, NIFBITS)];
 } if_set;
 
 #define IF_SET(n, p)    ((p)->ifs_bits[(n)/NIFBITS] |= (1 << ((n) % NIFBITS)))
@@ -132,4 +132,4 @@ struct mrt6msg {
 	struct in6_addr	im6_src, im6_dst;
 };
 
-#endif
+#endif /* __LINUX_MROUTE6_H */

@@ -25,7 +25,7 @@
  */
 
 #ifndef _AGP_H
-#define _AGP_H 1
+#define _AGP_H
 
 #define AGPIOC_BASE       'A'
 #define AGPIOC_INFO       _IOR (AGPIOC_BASE, 0, struct agp_info*)
@@ -51,6 +51,7 @@
 #endif
 
 #include <linux/types.h>
+#include <stdlib.h>
 
 struct agp_version {
 	__u16 major;
@@ -108,4 +109,4 @@ typedef struct _agp_unbind {
 } agp_unbind;
 
 
-#endif				/* _AGP_H */
+#endif /* _AGP_H */

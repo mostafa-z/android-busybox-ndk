@@ -25,74 +25,19 @@
 #ifndef __NOUVEAU_DRM_H__
 #define __NOUVEAU_DRM_H__
 
-#define NOUVEAU_DRM_HEADER_PATCHLEVEL 16
+#define DRM_NOUVEAU_EVENT_NVIF                                       0x80000000
 
-struct drm_nouveau_channel_alloc {
-	uint32_t     fb_ctxdma_handle;
-	uint32_t     tt_ctxdma_handle;
+#include "drm.h"
 
-	int          channel;
-	uint32_t     pushbuf_domains;
-
-	/* Notifier memory */
-	uint32_t     notifier_handle;
-
-	/* DRM-enforced subchannel assignments */
-	struct {
-		uint32_t handle;
-		uint32_t grclass;
-	} subchan[8];
-	uint32_t nr_subchan;
-};
-
-struct drm_nouveau_channel_free {
-	int channel;
-};
-
-struct drm_nouveau_grobj_alloc {
-	int      channel;
-	uint32_t handle;
-	int      class;
-};
-
-struct drm_nouveau_notifierobj_alloc {
-	uint32_t channel;
-	uint32_t handle;
-	uint32_t size;
-	uint32_t offset;
-};
-
-struct drm_nouveau_gpuobj_free {
-	int      channel;
-	uint32_t handle;
-};
-
-/* FIXME : maybe unify {GET,SET}PARAMs */
-#define NOUVEAU_GETPARAM_PCI_VENDOR      3
-#define NOUVEAU_GETPARAM_PCI_DEVICE      4
-#define NOUVEAU_GETPARAM_BUS_TYPE        5
-#define NOUVEAU_GETPARAM_FB_SIZE         8
-#define NOUVEAU_GETPARAM_AGP_SIZE        9
-#define NOUVEAU_GETPARAM_CHIPSET_ID      11
-#define NOUVEAU_GETPARAM_VM_VRAM_BASE    12
-#define NOUVEAU_GETPARAM_GRAPH_UNITS     13
-#define NOUVEAU_GETPARAM_PTIMER_TIME     14
-#define NOUVEAU_GETPARAM_HAS_BO_USAGE    15
-#define NOUVEAU_GETPARAM_HAS_PAGEFLIP    16
-struct drm_nouveau_getparam {
-	uint64_t param;
-	uint64_t value;
-};
-
-struct drm_nouveau_setparam {
-	uint64_t param;
-	uint64_t value;
-};
+#if defined(__cplusplus)
+extern "C" {
+#endif
 
 #define NOUVEAU_GEM_DOMAIN_CPU       (1 << 0)
 #define NOUVEAU_GEM_DOMAIN_VRAM      (1 << 1)
 #define NOUVEAU_GEM_DOMAIN_GART      (1 << 2)
 #define NOUVEAU_GEM_DOMAIN_MAPPABLE  (1 << 3)
+#define NOUVEAU_GEM_DOMAIN_COHERENT  (1 << 4)
 
 #define NOUVEAU_GEM_TILE_COMP        0x00030000 /* nv50-only */
 #define NOUVEAU_GEM_TILE_LAYOUT_MASK 0x0000ff00
@@ -102,34 +47,34 @@ struct drm_nouveau_setparam {
 #define NOUVEAU_GEM_TILE_NONCONTIG   0x00000008
 
 struct drm_nouveau_gem_info {
-	uint32_t handle;
-	uint32_t domain;
-	uint64_t size;
-	uint64_t offset;
-	uint64_t map_handle;
-	uint32_t tile_mode;
-	uint32_t tile_flags;
+	__u32 handle;
+	__u32 domain;
+	__u64 size;
+	__u64 offset;
+	__u64 map_handle;
+	__u32 tile_mode;
+	__u32 tile_flags;
 };
 
 struct drm_nouveau_gem_new {
 	struct drm_nouveau_gem_info info;
-	uint32_t channel_hint;
-	uint32_t align;
+	__u32 channel_hint;
+	__u32 align;
 };
 
 #define NOUVEAU_GEM_MAX_BUFFERS 1024
 struct drm_nouveau_gem_pushbuf_bo_presumed {
-	uint32_t valid;
-	uint32_t domain;
-	uint64_t offset;
+	__u32 valid;
+	__u32 domain;
+	__u64 offset;
 };
 
 struct drm_nouveau_gem_pushbuf_bo {
-	uint64_t user_priv;
-	uint32_t handle;
-	uint32_t read_domains;
-	uint32_t write_domains;
-	uint32_t valid_domains;
+	__u64 user_priv;
+	__u32 handle;
+	__u32 read_domains;
+	__u32 write_domains;
+	__u32 valid_domains;
 	struct drm_nouveau_gem_pushbuf_bo_presumed presumed;
 };
 
@@ -138,81 +83,70 @@ struct drm_nouveau_gem_pushbuf_bo {
 #define NOUVEAU_GEM_RELOC_OR   (1 << 2)
 #define NOUVEAU_GEM_MAX_RELOCS 1024
 struct drm_nouveau_gem_pushbuf_reloc {
-	uint32_t reloc_bo_index;
-	uint32_t reloc_bo_offset;
-	uint32_t bo_index;
-	uint32_t flags;
-	uint32_t data;
-	uint32_t vor;
-	uint32_t tor;
+	__u32 reloc_bo_index;
+	__u32 reloc_bo_offset;
+	__u32 bo_index;
+	__u32 flags;
+	__u32 data;
+	__u32 vor;
+	__u32 tor;
 };
 
 #define NOUVEAU_GEM_MAX_PUSH 512
 struct drm_nouveau_gem_pushbuf_push {
-	uint32_t bo_index;
-	uint32_t pad;
-	uint64_t offset;
-	uint64_t length;
+	__u32 bo_index;
+	__u32 pad;
+	__u64 offset;
+	__u64 length;
 };
 
 struct drm_nouveau_gem_pushbuf {
-	uint32_t channel;
-	uint32_t nr_buffers;
-	uint64_t buffers;
-	uint32_t nr_relocs;
-	uint32_t nr_push;
-	uint64_t relocs;
-	uint64_t push;
-	uint32_t suffix0;
-	uint32_t suffix1;
-	uint64_t vram_available;
-	uint64_t gart_available;
+	__u32 channel;
+	__u32 nr_buffers;
+	__u64 buffers;
+	__u32 nr_relocs;
+	__u32 nr_push;
+	__u64 relocs;
+	__u64 push;
+	__u32 suffix0;
+	__u32 suffix1;
+	__u64 vram_available;
+	__u64 gart_available;
 };
 
 #define NOUVEAU_GEM_CPU_PREP_NOWAIT                                  0x00000001
 #define NOUVEAU_GEM_CPU_PREP_WRITE                                   0x00000004
 struct drm_nouveau_gem_cpu_prep {
-	uint32_t handle;
-	uint32_t flags;
+	__u32 handle;
+	__u32 flags;
 };
 
 struct drm_nouveau_gem_cpu_fini {
-	uint32_t handle;
+	__u32 handle;
 };
 
-enum nouveau_bus_type {
-	NV_AGP     = 0,
-	NV_PCI     = 1,
-	NV_PCIE    = 2,
-};
-
-struct drm_nouveau_sarea {
-};
-
-#define DRM_NOUVEAU_GETPARAM           0x00
-#define DRM_NOUVEAU_SETPARAM           0x01
-#define DRM_NOUVEAU_CHANNEL_ALLOC      0x02
-#define DRM_NOUVEAU_CHANNEL_FREE       0x03
-#define DRM_NOUVEAU_GROBJ_ALLOC        0x04
-#define DRM_NOUVEAU_NOTIFIEROBJ_ALLOC  0x05
-#define DRM_NOUVEAU_GPUOBJ_FREE        0x06
+#define DRM_NOUVEAU_GETPARAM           0x00 /* deprecated */
+#define DRM_NOUVEAU_SETPARAM           0x01 /* deprecated */
+#define DRM_NOUVEAU_CHANNEL_ALLOC      0x02 /* deprecated */
+#define DRM_NOUVEAU_CHANNEL_FREE       0x03 /* deprecated */
+#define DRM_NOUVEAU_GROBJ_ALLOC        0x04 /* deprecated */
+#define DRM_NOUVEAU_NOTIFIEROBJ_ALLOC  0x05 /* deprecated */
+#define DRM_NOUVEAU_GPUOBJ_FREE        0x06 /* deprecated */
+#define DRM_NOUVEAU_NVIF               0x07
 #define DRM_NOUVEAU_GEM_NEW            0x40
 #define DRM_NOUVEAU_GEM_PUSHBUF        0x41
 #define DRM_NOUVEAU_GEM_CPU_PREP       0x42
 #define DRM_NOUVEAU_GEM_CPU_FINI       0x43
 #define DRM_NOUVEAU_GEM_INFO           0x44
 
-#define DRM_IOCTL_NOUVEAU_GETPARAM           DRM_IOWR(DRM_COMMAND_BASE + DRM_NOUVEAU_GETPARAM, struct drm_nouveau_getparam)
-#define DRM_IOCTL_NOUVEAU_SETPARAM           DRM_IOWR(DRM_COMMAND_BASE + DRM_NOUVEAU_SETPARAM, struct drm_nouveau_setparam)
-#define DRM_IOCTL_NOUVEAU_CHANNEL_ALLOC      DRM_IOWR(DRM_COMMAND_BASE + DRM_NOUVEAU_CHANNEL_ALLOC, struct drm_nouveau_channel_alloc)
-#define DRM_IOCTL_NOUVEAU_CHANNEL_FREE       DRM_IOW (DRM_COMMAND_BASE + DRM_NOUVEAU_CHANNEL_FREE, struct drm_nouveau_channel_free)
-#define DRM_IOCTL_NOUVEAU_GROBJ_ALLOC        DRM_IOW (DRM_COMMAND_BASE + DRM_NOUVEAU_GROBJ_ALLOC, struct drm_nouveau_grobj_alloc)
-#define DRM_IOCTL_NOUVEAU_NOTIFIEROBJ_ALLOC  DRM_IOWR(DRM_COMMAND_BASE + DRM_NOUVEAU_NOTIFIEROBJ_ALLOC, struct drm_nouveau_notifierobj_alloc)
-#define DRM_IOCTL_NOUVEAU_GPUOBJ_FREE        DRM_IOW (DRM_COMMAND_BASE + DRM_NOUVEAU_GPUOBJ_FREE, struct drm_nouveau_gpuobj_free)
 #define DRM_IOCTL_NOUVEAU_GEM_NEW            DRM_IOWR(DRM_COMMAND_BASE + DRM_NOUVEAU_GEM_NEW, struct drm_nouveau_gem_new)
 #define DRM_IOCTL_NOUVEAU_GEM_PUSHBUF        DRM_IOWR(DRM_COMMAND_BASE + DRM_NOUVEAU_GEM_PUSHBUF, struct drm_nouveau_gem_pushbuf)
 #define DRM_IOCTL_NOUVEAU_GEM_CPU_PREP       DRM_IOW (DRM_COMMAND_BASE + DRM_NOUVEAU_GEM_CPU_PREP, struct drm_nouveau_gem_cpu_prep)
 #define DRM_IOCTL_NOUVEAU_GEM_CPU_FINI       DRM_IOW (DRM_COMMAND_BASE + DRM_NOUVEAU_GEM_CPU_FINI, struct drm_nouveau_gem_cpu_fini)
 #define DRM_IOCTL_NOUVEAU_GEM_INFO           DRM_IOWR(DRM_COMMAND_BASE + DRM_NOUVEAU_GEM_INFO, struct drm_nouveau_gem_info)
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif /* __NOUVEAU_DRM_H__ */

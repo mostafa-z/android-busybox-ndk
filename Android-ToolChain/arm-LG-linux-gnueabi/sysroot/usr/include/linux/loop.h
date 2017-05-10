@@ -1,6 +1,3 @@
-#ifndef _LINUX_LOOP_H
-#define _LINUX_LOOP_H
-
 /*
  * include/linux/loop.h
  *
@@ -9,6 +6,9 @@
  * Copyright 1993 by Theodore Ts'o.  Redistribution of this file is
  * permitted under the GNU General Public License.
  */
+#ifndef _LINUX_LOOP_H
+#define _LINUX_LOOP_H
+
 
 #define LO_NAME_SIZE	64
 #define LO_KEY_SIZE	32
@@ -21,6 +21,7 @@ enum {
 	LO_FLAGS_READ_ONLY	= 1,
 	LO_FLAGS_AUTOCLEAR	= 4,
 	LO_FLAGS_PARTSCAN	= 8,
+	LO_FLAGS_DIRECT_IO	= 16,
 };
 
 #include <asm/posix_types.h>	/* for __kernel_old_dev_t */
@@ -86,9 +87,10 @@ struct loop_info64 {
 #define LOOP_GET_STATUS64	0x4C05
 #define LOOP_CHANGE_FD		0x4C06
 #define LOOP_SET_CAPACITY	0x4C07
+#define LOOP_SET_DIRECT_IO	0x4C08
 
 /* /dev/loop-control interface */
 #define LOOP_CTL_ADD		0x4C80
 #define LOOP_CTL_REMOVE		0x4C81
 #define LOOP_CTL_GET_FREE	0x4C82
-#endif
+#endif /* _LINUX_LOOP_H */

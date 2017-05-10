@@ -15,7 +15,7 @@
  *		2 of the License, or (at your option) any later version.
  */
 #ifndef _LINUX_ICMP_H
-#define	_LINUX_ICMP_H
+#define _LINUX_ICMP_H
 
 #include <linux/types.h>
 
@@ -79,6 +79,7 @@ struct icmphdr {
 		__be16	__unused;
 		__be16	mtu;
 	} frag;
+	__u8	reserved[4];
   } un;
 };
 
@@ -94,4 +95,4 @@ struct icmp_filter {
 };
 
 
-#endif	/* _LINUX_ICMP_H */
+#endif /* _LINUX_ICMP_H */

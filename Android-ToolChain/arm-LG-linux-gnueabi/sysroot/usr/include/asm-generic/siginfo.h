@@ -91,6 +91,15 @@ typedef struct siginfo {
 			int _trapno;	/* TRAP # which caused the signal */
 #endif
 			short _addr_lsb; /* LSB of the reported address */
+			union {
+				/* used when si_code=SEGV_BNDERR */
+				struct {
+					void *_lower;
+					void *_upper;
+				} _addr_bnd;
+				/* used when si_code=SEGV_PKUERR */
+				__u32 _pkey;
+			};
 		} _sigfault;
 
 		/* SIGPOLL */
@@ -98,9 +107,18 @@ typedef struct siginfo {
 			__ARCH_SI_BAND_T _band;	/* POLL_IN, POLL_OUT, POLL_MSG */
 			int _fd;
 		} _sigpoll;
+
+		/* SIGSYS */
+		struct {
+			void *_call_addr; /* calling user insn */
+			int _syscall;	/* triggering system call number */
+			unsigned int _arch;	/* AUDIT_ARCH_* of syscall */
+		} _sigsys;
 	} _sifields;
 } __ARCH_SI_ATTRIBUTES siginfo_t;
 
+/* If the arch shares siginfo, then it has SIGSYS. */
+#define __ARCH_SIGSYS
 #endif
 
 /*
@@ -122,8 +140,16 @@ typedef struct siginfo {
 #define si_trapno	_sifields._sigfault._trapno
 #endif
 #define si_addr_lsb	_sifields._sigfault._addr_lsb
+#define si_lower	_sifields._sigfault._addr_bnd._lower
+#define si_upper	_sifields._sigfault._addr_bnd._upper
+#define si_pkey		_sifields._sigfault._pkey
 #define si_band		_sifields._sigpoll._band
 #define si_fd		_sifields._sigpoll._fd
+#ifdef __ARCH_SIGSYS
+#define si_call_addr	_sifields._sigsys._call_addr
+#define si_syscall	_sifields._sigsys._syscall
+#define si_arch		_sifields._sigsys._arch
+#endif
 
 #define __SI_KILL	0
 #define __SI_TIMER	0
@@ -132,6 +158,7 @@ typedef struct siginfo {
 #define __SI_CHLD	0
 #define __SI_RT		0
 #define __SI_MESGQ	0
+#define __SI_SYS	0
 #define __SI_CODE(T,N)	(N)
 
 /*
@@ -182,7 +209,9 @@ typedef struct siginfo {
  */
 #define SEGV_MAPERR	(__SI_FAULT|1)	/* address not mapped to object */
 #define SEGV_ACCERR	(__SI_FAULT|2)	/* invalid permissions for mapped object */
-#define NSIGSEGV	2
+#define SEGV_BNDERR	(__SI_FAULT|3)  /* failed address bound checks */
+#define SEGV_PKUERR	(__SI_FAULT|4)  /* failed protection key checks */
+#define NSIGSEGV	4
 
 /*
  * SIGBUS si_codes
@@ -226,6 +255,12 @@ typedef struct siginfo {
 #define POLL_PRI	(__SI_POLL|5)	/* high priority input available */
 #define POLL_HUP	(__SI_POLL|6)	/* device disconnected */
 #define NSIGPOLL	6
+
+/*
+ * SIGSYS si_codes
+ */
+#define SYS_SECCOMP		(__SI_SYS|1)	/* seccomp triggered */
+#define NSIGSYS	1
 
 /*
  * sigevent definitions
@@ -272,4 +307,4 @@ typedef struct sigevent {
 #define sigev_notify_thread_id	 _sigev_un._tid
 
 
-#endif
+#endif /* _ASM_GENERIC_SIGINFO_H */
